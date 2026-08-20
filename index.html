@@ -118,15 +118,33 @@
           </div>
         </div>
 
-        <!-- 體溫與純時間休息觀察 -->
+        <!-- 體溫與純時間/時分自填休息觀察時間 -->
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label class="block text-xs font-semibold text-slate-600 mb-1">體溫 (°C)</label>
-            <input type="number" step="0.1" id="inputTemp" placeholder="如 36.5" class="w-full border rounded px-2.5 py-1.5 text-sm">
+            <input type="number" step="0.1" id="inputTemp" placeholder="如 36.5" class="w-full border rounded px-2.5 py-1.5 text-sm bg-white">
           </div>
           <div>
-            <label class="block text-xs font-semibold text-slate-600 mb-1">休息觀察時間 (純時間資料)</label>
-            <input type="time" id="inputRestTime" step="60" class="w-full border rounded px-2.5 py-1.5 text-sm bg-white">
+            <div class="flex justify-between items-center mb-1">
+              <label class="block text-xs font-semibold text-slate-600">休息觀察時間 (時 / 分自填)</label>
+              <div class="flex gap-1 text-[11px]">
+                <button type="button" onclick="setQuickRest(0, 10)" class="px-1.5 py-0.5 bg-slate-100 hover:bg-teal-100 text-slate-600 rounded">10分</button>
+                <button type="button" onclick="setQuickRest(0, 20)" class="px-1.5 py-0.5 bg-slate-100 hover:bg-teal-100 text-slate-600 rounded">20分</button>
+                <button type="button" onclick="setQuickRest(0, 30)" class="px-1.5 py-0.5 bg-slate-100 hover:bg-teal-100 text-slate-600 rounded">30分</button>
+                <button type="button" onclick="setQuickRest(1, 0)" class="px-1.5 py-0.5 bg-slate-100 hover:bg-teal-100 text-slate-600 rounded">1小時</button>
+                <button type="button" onclick="setQuickRest('', '')" class="px-1.5 py-0.5 bg-slate-100 hover:bg-red-100 text-slate-500 rounded">清除</button>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <div class="flex items-center bg-white border rounded px-2 py-1 flex-1">
+                <input type="number" id="inputRestHour" min="0" max="23" placeholder="0" class="w-full text-center text-sm outline-none">
+                <span class="text-xs text-slate-400 font-medium ml-1">時</span>
+              </div>
+              <div class="flex items-center bg-white border rounded px-2 py-1 flex-1">
+                <input type="number" id="inputRestMin" min="0" max="59" placeholder="0" class="w-full text-center text-sm outline-none">
+                <span class="text-xs text-slate-400 font-medium ml-1">分</span>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -241,11 +259,12 @@
               <th class="border border-slate-300 p-2">受傷地點</th>
               <th class="border border-slate-300 p-2">情形 (部位/內外科)</th>
               <th class="border border-slate-300 p-2">處置</th>
+              <th class="border border-slate-300 p-2">休息觀察時間</th>
               <th class="border border-slate-300 p-2">備註說明</th>
             </tr>
           </thead>
           <tbody id="logTableBody">
-            <tr><td colspan="14" class="text-center p-4 text-slate-400">請設定篩選條件後點擊查詢</td></tr>
+            <tr><td colspan="15" class="text-center p-4 text-slate-400">請設定篩選條件後點擊查詢</td></tr>
           </tbody>
         </table>
       </div>
@@ -413,9 +432,7 @@
     window.onload = function() {
       lucide.createIcons();
       initDateDefaults();
-      // 先從本機快取秒開資料
       loadLocalCache();
-      // 背景同步最新資料
       fetchInitialData();
     };
 
@@ -457,6 +474,12 @@
       document.getElementById('dispYear').value = parts[0];
       document.getElementById('dispMonth').value = parseInt(parts[1], 10);
       document.getElementById('dispDay').value = parseInt(parts[2], 10);
+    }
+
+    // 快捷設定休息觀察時間 (時, 分)
+    function setQuickRest(hr, min) {
+      document.getElementById('inputRestHour').value = hr;
+      document.getElementById('inputRestMin').value = min;
     }
 
     async function fetchInitialData() {
@@ -713,6 +736,18 @@
       btn.innerHTML = `<i data-lucide="loader" class="w-4 h-4 animate-spin"></i> 儲存中...`;
       lucide.createIcons();
 
+      // 組合休息觀察時間文字
+      const rHr = document.getElementById('inputRestHour').value.trim();
+      const rMin = document.getElementById('inputRestMin').value.trim();
+      let restTimeText = "";
+      if (rHr && rMin) {
+        restTimeText = `${rHr}時${rMin}分`;
+      } else if (rHr && !rMin) {
+        restTimeText = `${rHr}小時`;
+      } else if (!rHr && rMin) {
+        restTimeText = `${rMin}分`;
+      }
+
       const record = {
         year: document.getElementById('dispYear').value,
         month: document.getElementById('dispMonth').value,
@@ -726,7 +761,7 @@
         name: document.getElementById('inputName').value,
         gender: document.getElementById('inputGender').value,
         temp: document.getElementById('inputTemp').value,
-        restTime: document.getElementById('inputRestTime').value, // 純時間 HH:mm
+        restTime: restTimeText, // 純時分資料 (如: 20分 / 1時10分)
         location: document.getElementById('inputLocation').value,
         bodyPart: document.getElementById('val_bodyPart').value,
         trauma: document.getElementById('val_trauma').value,
@@ -767,6 +802,8 @@
         document.getElementById(`val_${t}`).value = "";
         document.getElementById(`disp_${t}`).innerText = "無";
       });
+      document.getElementById('inputRestHour').value = "";
+      document.getElementById('inputRestMin').value = "";
       initDateDefaults();
     }
 
@@ -823,7 +860,7 @@
 
       const tbody = document.getElementById('logTableBody');
       if (filtered.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="14" class="text-center p-4 text-slate-400">查無資料</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="15" class="text-center p-4 text-slate-400">查無資料</td></tr>`;
         return;
       }
 
@@ -842,6 +879,7 @@
           <td class="border border-slate-300 p-1.5">${r.location || ''}</td>
           <td class="border border-slate-300 p-1.5 text-left">${[r.bodyPart, r.trauma, r.internal].filter(Boolean).join(' / ')}</td>
           <td class="border border-slate-300 p-1.5 text-left">${r.treatment || ''}</td>
+          <td class="border border-slate-300 p-1.5">${r.restTime || ''}</td>
           <td class="border border-slate-300 p-1.5 text-left">${r.notes || ''}</td>
         </tr>
       `).join('');
