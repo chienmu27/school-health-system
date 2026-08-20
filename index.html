@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>學校健康中心 - 傷病記錄與統計系統</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    @media print {
+      .no-print { display: none !important; }
+      .print-area { border: none !important; box-shadow: none !important; }
+    }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen flex flex-col">
+
+  <!-- 頂部導航 -->
+  <header class="bg-teal-700 text-white shadow-md no-print">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
+      <div class="flex items-center space-x-3">
+        <i data-lucide="cross" class="w-8 h-8 text-red-300"></i>
+        <h1 class="text-xl font-bold tracking-wider">學校健康中心傷病記錄管理系統</h1>
+      </div>
+      <div id="statusBadge" class="text-xs bg-teal-800 px-3 py-1 rounded-full flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full bg-yellow-400 animate-pulse"></span> 資料同步中...
+      </div>
+    </div>
+    <div class="max-w-7xl mx-auto px-4 flex space-x-1 border-t border-teal-600/50">
+      <button onclick="switchTab('formTab')" class="nav-btn px-4 py-2.5 font-medium border-b-2 border-white text-white flex items-center gap-2"><i data-lucide="edit-3" class="w-4 h-4"></i>傷病登記</button>
+      <button onclick="switchTab('logTab')" class="nav-btn px-4 py-2.5 font-medium border-b-2 border-transparent text-teal-100 hover:text-white flex items-center gap-2"><i data-lucide="list" class="w-4 h-4"></i>日誌查詢</button>
+      <button onclick="switchTab('reportTab')" class="nav-btn px-4 py-2.5 font-medium border-b-2 border-transparent text-teal-100 hover:text-white flex items-center gap-2"><i data-lucide="bar-chart-2" class="w-4 h-4"></i>統計報表</button>
+    </div>
+  </header>
+
+  <!-- 主內容區 -->
+  <main class="max-w-7xl mx-auto p-4 md:p-6 w-full flex-grow">
+
+    <!-- 頁籤一：傷病資料登記表 -->
+    <div id="formTab" class="tab-content">
+      <form id="recordForm" onsubmit="submitForm(event)" class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 space-y-6">
+        <div class="flex items-center justify-between border-b pb-3">
+          <h2 class="text-lg font-bold text-teal-800 flex items-center gap-2"><i data-lucide="clipboard-plus" class="w-5 h-5"></i> 新增傷病記錄</h2>
+          <span class="text-xs text-slate-500">* 標記為必填欄位</span>
+        </div>
+
+        <!-- 日期與時間 -->
+        <div class="grid grid-cols-1 md:grid-cols-5 gap-4 bg-slate-50 p-4 rounded-lg">
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">發生日期 *</label>
+            <input type="date" id="inputDate" required onchange="syncDateFields()" class="w-full border rounded px-2.5 py-1.5 text-sm bg-white focus:ring-2 focus:ring-teal-500">
+          </div>
+          <div class="grid grid-cols-3 gap-1">
+            <div>
+              <label class="block text-xs text-slate-500 mb-1">年</label>
+              <input type="text" id="dispYear" readonly class="w-full bg-slate-200 border rounded px-1.5 py-1.5 text-sm text-center">
+            </div>
+            <div>
+              <label class="block text-xs text-slate-500 mb-1">月</label>
+              <input type="text" id="dispMonth" readonly class="w-full bg-slate-200 border rounded px-1.5 py-1.5 text-sm text-center">
+            </div>
+            <div>
+              <label class="block text-xs text-slate-500 mb-1">日</label>
+              <input type="text" id="dispDay" readonly class="w-full bg-slate-200 border rounded px-1.5 py-1.5 text-sm text-center">
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">時間 *</label>
+            <input type="time" id="inputTime" required class="w-full border rounded px-2.5 py-1.5 text-sm bg-white">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">時段 *</label>
+            <select id="inputPeriod" required class="w-full border rounded px-2.5 py-1.5 text-sm bg-white">
+              <option value="上午">上午</option>
+              <option value="中午">中午</option>
+              <option value="下午">下午</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">受傷地點 *</label>
+            <select id="inputLocation" required class="w-full border rounded px-2.5 py-1.5 text-sm bg-white"></select>
+          </div>
+        </div>
+
+        <!-- 學生基本資料 (自動比對) -->
+        <div class="grid grid-cols-2 md:grid-cols-6 gap-4 bg-teal-50/50 p-4 rounded-lg border border-teal-100">
+          <div>
+            <label class="block text-xs font-semibold text-teal-900 mb-1">年級 *</label>
+            <input type="number" id="inputGrade" min="1" max="9" required oninput="matchStudent()" placeholder="如: 4" class="w-full border rounded px-2.5 py-1.5 text-sm bg-white">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-teal-900 mb-1">班級 *</label>
+            <input type="number" id="inputClass" min="1" max="30" required oninput="matchStudent()" placeholder="如: 1" class="w-full border rounded px-2.5 py-1.5 text-sm bg-white">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-teal-900 mb-1">座號 *</label>
+            <input type="number" id="inputSeat" min="1" max="50" required oninput="matchStudent()" placeholder="如: 15" class="w-full border rounded px-2.5 py-1.5 text-sm bg-white">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-teal-900 mb-1">姓名 (自動帶出)</label>
+            <input type="text" id="inputName" required class="w-full border rounded px-2.5 py-1.5 text-sm bg-white">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-teal-900 mb-1">性別</label>
+            <select id="inputGender" class="w-full border rounded px-2.5 py-1.5 text-sm bg-white">
+              <option value="男">男</option>
+              <option value="女">女</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-teal-900 mb-1">學號</label>
+            <input type="text" id="inputId" class="w-full border rounded px-2.5 py-1.5 text-sm bg-white">
+          </div>
+        </div>
+
+        <!-- 體溫與觀察時間 -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">體溫 (°C)</label>
+            <input type="number" step="0.1" id="inputTemp" placeholder="如 36.5" class="w-full border rounded px-2.5 py-1.5 text-sm">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">休息觀察時間</label>
+            <input type="time" id="inputRestTime" class="w-full border rounded px-2.5 py-1.5 text-sm">
+          </div>
+        </div>
+
+        <!-- 彈窗複選欄位項目 (受傷部位、外科、內科、處置) -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="border rounded-lg p-3 bg-slate-50">
+            <div class="flex justify-between items-center mb-1">
+              <label class="text-xs font-bold text-slate-700">受傷部位</label>
+              <button type="button" onclick="openModal('bodyPart')" class="text-xs bg-teal-600 text-white px-2.5 py-1 rounded hover:bg-teal-700">選擇部位</button>
+            </div>
+            <div id="disp_bodyPart" class="text-sm min-h-[32px] p-1.5 bg-white border rounded text-slate-600">無</div>
+            <input type="hidden" id="val_bodyPart">
+          </div>
+
+          <div class="border rounded-lg p-3 bg-slate-50">
+            <div class="flex justify-between items-center mb-1">
+              <label class="text-xs font-bold text-slate-700">外科傷病</label>
+              <button type="button" onclick="openModal('trauma')" class="text-xs bg-teal-600 text-white px-2.5 py-1 rounded hover:bg-teal-700">選擇外科</button>
+            </div>
+            <div id="disp_trauma" class="text-sm min-h-[32px] p-1.5 bg-white border rounded text-slate-600">無</div>
+            <input type="hidden" id="val_trauma">
+          </div>
+
+          <div class="border rounded-lg p-3 bg-slate-50">
+            <div class="flex justify-between items-center mb-1">
+              <label class="text-xs font-bold text-slate-700">內科傷病</label>
+              <button type="button" onclick="openModal('internal')" class="text-xs bg-teal-600 text-white px-2.5 py-1 rounded hover:bg-teal-700">選擇內科</button>
+            </div>
+            <div id="disp_internal" class="text-sm min-h-[32px] p-1.5 bg-white border rounded text-slate-600">無</div>
+            <input type="hidden" id="val_internal">
+          </div>
+
+          <div class="border rounded-lg p-3 bg-slate-50">
+            <div class="flex justify-between items-center mb-1">
+              <label class="text-xs font-bold text-slate-700">傷病處理</label>
+              <button type="button" onclick="openModal('treatment')" class="text-xs bg-teal-600 text-white px-2.5 py-1 rounded hover:bg-teal-700">選擇處置</button>
+            </div>
+            <div id="disp_treatment" class="text-sm min-h-[32px] p-1.5 bg-white border rounded text-slate-600">無</div>
+            <input type="hidden" id="val_treatment">
+          </div>
+        </div>
+
+        <!-- 備註說明 -->
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">備註說明</label>
+          <textarea id="inputNotes" rows="2" placeholder="填寫詳細受傷狀況或處理說明..." class="w-full border rounded px-2.5 py-1.5 text-sm"></textarea>
+        </div>
+
+        <!-- 送出按鈕 -->
+        <div class="flex justify-end gap-3 pt-2">
+          <button type="reset" onclick="resetForm()" class="px-5 py-2 border rounded-lg text-slate-600 hover:bg-slate-50 text-sm font-medium">重設</button>
+          <button type="submit" id="btnSubmit" class="px-6 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 text-sm font-medium flex items-center gap-2">
+            <i data-lucide="save" class="w-4 h-4"></i> 儲存記錄
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <!-- 頁籤二：傷病日誌查詢 -->
+    <div id="logTab" class="tab-content hidden space-y-4">
+      <div class="bg-white p-4 rounded-xl border border-slate-200 space-y-4 no-print">
+        <div class="flex flex-wrap gap-2 border-b pb-3">
+          <button onclick="setLogSubTab('class')" id="subTabBtn_class" class="px-3 py-1.5 text-xs font-semibold rounded bg-teal-600 text-white">1. 分班日誌</button>
+          <button onclick="setLogSubTab('date_class')" id="subTabBtn_date_class" class="px-3 py-1.5 text-xs font-semibold rounded bg-slate-100 text-slate-700">2. 分日(依班級排序)</button>
+          <button onclick="setLogSubTab('date_time')" id="subTabBtn_date_time" class="px-3 py-1.5 text-xs font-semibold rounded bg-slate-100 text-slate-700">3. 分日(依時間排序)</button>
+        </div>
+
+        <!-- 篩選條件區 -->
+        <div class="grid grid-cols-2 md:grid-cols-6 gap-3 items-end">
+          <div>
+            <label class="block text-xs font-medium text-slate-600 mb-1">年份</label>
+            <input type="number" id="queryYear" class="w-full border rounded px-2 py-1.5 text-sm">
+          </div>
+          <div id="queryMonthBox">
+            <label class="block text-xs font-medium text-slate-600 mb-1">月份</label>
+            <input type="number" id="queryMonth" min="1" max="12" class="w-full border rounded px-2 py-1.5 text-sm">
+          </div>
+          <div id="queryDayBox">
+            <label class="block text-xs font-medium text-slate-600 mb-1">日期</label>
+            <input type="number" id="queryDay" min="1" max="31" class="w-full border rounded px-2 py-1.5 text-sm">
+          </div>
+          <div id="queryGradeBox">
+            <label class="block text-xs font-medium text-slate-600 mb-1">年級</label>
+            <input type="number" id="queryGrade" class="w-full border rounded px-2 py-1.5 text-sm">
+          </div>
+          <div id="queryClassBox">
+            <label class="block text-xs font-medium text-slate-600 mb-1">班級</label>
+            <input type="number" id="queryClass" class="w-full border rounded px-2 py-1.5 text-sm">
+          </div>
+          <div>
+            <button onclick="renderLogs()" class="w-full bg-teal-600 text-white rounded px-3 py-1.5 text-sm font-medium hover:bg-teal-700 flex justify-center items-center gap-1">
+              <i data-lucide="search" class="w-4 h-4"></i> 查詢
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 日誌輸出表格 -->
+      <div class="bg-white p-6 rounded-xl border border-slate-200 print-area overflow-x-auto">
+        <h3 id="logTableTitle" class="text-base font-bold text-center mb-4">傷病日誌</h3>
+        <table class="w-full text-xs text-left border-collapse border border-slate-300">
+          <thead class="bg-slate-100 text-slate-700 text-center">
+            <tr>
+              <th class="border border-slate-300 p-2">年</th>
+              <th class="border border-slate-300 p-2">月</th>
+              <th class="border border-slate-300 p-2">日</th>
+              <th class="border border-slate-300 p-2">時間</th>
+              <th class="border border-slate-300 p-2">時段</th>
+              <th class="border border-slate-300 p-2">年級</th>
+              <th class="border border-slate-300 p-2">班級</th>
+              <th class="border border-slate-300 p-2">座號</th>
+              <th class="border border-slate-300 p-2">姓名</th>
+              <th class="border border-slate-300 p-2">性別</th>
+              <th class="border border-slate-300 p-2">受傷地點</th>
+              <th class="border border-slate-300 p-2">情形 (部位/內外科)</th>
+              <th class="border border-slate-300 p-2">處置</th>
+              <th class="border border-slate-300 p-2">備註說明</th>
+            </tr>
+          </thead>
+          <tbody id="logTableBody">
+            <tr><td colspan="14" class="text-center p-4 text-slate-400">請設定篩選條件後點擊查詢</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 頁籤三：統計報表 -->
+    <div id="reportTab" class="tab-content hidden space-y-4">
+      <div class="bg-white p-4 rounded-xl border border-slate-200 flex flex-wrap items-center justify-between gap-4 no-print">
+        <div class="flex gap-2">
+          <button onclick="setReportType('monthCount')" id="repBtn_monthCount" class="px-3 py-1.5 text-xs font-semibold rounded bg-teal-600 text-white">傷病人數(分月)</button>
+          <button onclick="setReportType('monthStats')" id="repBtn_monthStats" class="px-3 py-1.5 text-xs font-semibold rounded bg-slate-100 text-slate-700">傷病統計報表(分月)</button>
+          <button onclick="setReportType('yearStats')" id="repBtn_yearStats" class="px-3 py-1.5 text-xs font-semibold rounded bg-slate-100 text-slate-700">全學年統計總表</button>
+        </div>
+        <div class="flex items-center gap-3">
+          <div class="flex items-center gap-1 text-xs">
+            <span>年份:</span>
+            <input type="number" id="repYear" class="border rounded px-2 py-1 w-20 text-sm">
+          </div>
+          <div id="repMonthWrap" class="flex items-center gap-1 text-xs">
+            <span>月份:</span>
+            <input type="number" id="repMonth" min="1" max="12" class="border rounded px-2 py-1 w-16 text-sm">
+          </div>
+          <button onclick="renderReport()" class="bg-teal-600 text-white px-3 py-1 rounded text-xs hover:bg-teal-700">產生報表</button>
+          <button onclick="window.print()" class="bg-slate-700 text-white px-3 py-1 rounded text-xs hover:bg-slate-800 flex items-center gap-1"><i data-lucide="printer" class="w-3.5 h-3.5"></i>列印</button>
+        </div>
+      </div>
+
+      <!-- 報表呈現容器 -->
+      <div id="reportContainer" class="bg-white p-6 rounded-xl border border-slate-200 overflow-x-auto print-area min-h-[400px]">
+        <div class="text-center text-slate-400 py-10">請點擊上方按鈕產生報表</div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- 彈窗選擇器 Modal (受傷部位、外科、內科、處置) -->
+  <div id="multiSelectModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center p-4 z-50">
+    <div class="bg-white rounded-xl max-w-md w-full p-5 shadow-2xl space-y-4">
+      <div class="flex justify-between items-center border-b pb-2">
+        <h3 id="modalTitle" class="font-bold text-slate-800">選擇項目</h3>
+        <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <div id="modalOptions" class="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-60 overflow-y-auto p-1">
+        <!-- JS 動態生成選項 Checkbox -->
+      </div>
+      <div class="flex justify-end gap-2 border-t pt-3">
+        <button onclick="closeModal()" class="px-4 py-1.5 text-xs text-slate-600 border rounded hover:bg-slate-50">取消</button>
+        <button onclick="confirmModalSelection()" class="px-4 py-1.5 text-xs bg-teal-600 text-white rounded hover:bg-teal-700">確認帶入</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // 💡 請在此處填入您的 Google Apps Script 網頁應用程式網址
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzrj3zebgP_k8y591eiSQRNyHcdqkZ5s-GTSN2bOMaX8AZr3GDV6HmCwx6OmO6e1wTJ/exec";
+
+    // 預設選項資料庫
+    const PRESETS = {
+      bodyPart: ["頭", "頸", "肩", "胸", "腹", "背", "眼", "顏面", "口腔", "耳鼻喉", "上肢", "腰", "下肢", "臀部", "會陰部"],
+      trauma: ["擦傷", "裂割刺傷", "夾壓傷", "跌挫傷", "扭傷", "灼燙傷", "叮咬傷", "骨折", "舊傷", "外科其他"],
+      internal: ["發燒", "暈眩", "噁心嘔吐", "頭痛", "牙痛", "胃痛", "腹痛", "腹瀉", "經痛", "氣喘", "流鼻血", "疹癢", "眼疾", "內科其他"],
+      treatment: ["傷口處理", "冰敷", "熱敷", "休息觀察", "通知家長", "家長帶回", "校方送醫", "衛生教育", "處理其他"]
+    };
+
+    let currentModalType = "";
+    let appData = { students: [], locations: [], records: [] };
+    let logSubTab = "class";
+    let reportType = "monthCount";
+
+    // 初始化頁面
+    window.onload = function() {
+      lucide.createIcons();
+      initDateDefaults();
+      fetchInitialData();
+    };
+
+    function initDateDefaults() {
+      const now = new Date();
+      const yyyy = now.getFullYear();
+      const mm = String(now.getMonth() + 1).padStart(2, '0');
+      const dd = String(now.getDate()).padStart(2, '0');
+      const hh = String(now.getHours()).padStart(2, '0');
+      const min = String(now.getMinutes()).padStart(2, '0');
+
+      document.getElementById('inputDate').value = `${yyyy}-${mm}-${dd}`;
+      document.getElementById('inputTime').value = `${hh}:${min}`;
+      document.getElementById('queryYear').value = yyyy;
+      document.getElementById('queryMonth').value = now.getMonth() + 1;
+      document.getElementById('queryDay').value = now.getDate();
+      document.getElementById('repYear').value = yyyy;
+      document.getElementById('repMonth').value = now.getMonth() + 1;
+      syncDateFields();
+    }
+
+    function syncDateFields() {
+      const val = document.getElementById('inputDate').value;
+      if (!val) return;
+      const parts = val.split('-');
+      document.getElementById('dispYear').value = parts[0];
+      document.getElementById('dispMonth').value = parseInt(parts[1], 10);
+      document.getElementById('dispDay').value = parseInt(parts[2], 10);
+    }
+
+    // 從 GAS 獲取資料
+    async function fetchInitialData() {
+      const badge = document.getElementById('statusBadge');
+      if (SCRIPT_URL === "YOUR_GAS_WEB_APP_URL_HERE") {
+        badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-red-400"></span> 請設定 API 網址`;
+        populateLocations(["運動場", "遊戲器材", "普通教室", "專科教室", "走廊", "樓梯", "地下室", "體育館活動中心", "廁所", "校外", "其他"]);
+        return;
+      }
+      try {
+        const res = await fetch(`${SCRIPT_URL}?action=getInitialData`);
+        const data = await res.json();
+        if (data.status === "success") {
+          appData = data;
+          populateLocations(data.locations);
+          badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-green-400"></span> 連線正常 (${data.records.length} 筆記錄)`;
+        }
+      } catch (err) {
+        badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-red-400"></span> 連線失敗`;
+        console.error(err);
+      }
+    }
+
+    function populateLocations(locations) {
+      const select = document.getElementById('inputLocation');
+      select.innerHTML = locations.map(loc => `<option value="${loc}">${loc}</option>`).join('');
+    }
+
+    // 自動比對學生
+    function matchStudent() {
+      const g = document.getElementById('inputGrade').value.trim();
+      const c = document.getElementById('inputClass').value.trim();
+      const s = document.getElementById('inputSeat').value.trim();
+
+      if (g && c && s && appData.students.length > 0) {
+        const found = appData.students.find(stu => 
+          String(stu.grade) === g && String(stu.class) === c && String(stu.seat) === s
+        );
+        if (found) {
+          document.getElementById('inputName').value = found.name || "";
+          document.getElementById('inputGender').value = found.gender || "男";
+          document.getElementById('inputId').value = found.id || "";
+        }
+      }
+    }
+
+    // 彈窗多選功能
+    function openModal(type) {
+      currentModalType = type;
+      const titleMap = { bodyPart: "選擇受傷部位", trauma: "選擇外科傷病", internal: "選擇內科傷病", treatment: "選擇傷病處理" };
+      document.getElementById('modalTitle').innerText = titleMap[type];
+      
+      const currentValues = (document.getElementById(`val_${type}`).value || "").split(',').map(s => s.trim());
+      const container = document.getElementById('modalOptions');
+      container.innerHTML = PRESETS[type].map(item => `
+        <label class="flex items-center space-x-2 p-2 border rounded hover:bg-slate-50 cursor-pointer text-xs">
+          <input type="checkbox" value="${item}" ${currentValues.includes(item) ? 'checked' : ''} class="rounded text-teal-600">
+          <span>${item}</span>
+        </label>
+      `).join('');
+
+      document.getElementById('multiSelectModal').classList.remove('hidden');
+      document.getElementById('multiSelectModal').classList.add('flex');
+    }
+
+    function closeModal() {
+      document.getElementById('multiSelectModal').classList.add('hidden');
+      document.getElementById('multiSelectModal').classList.remove('flex');
+    }
+
+    function confirmModalSelection() {
+      const checked = Array.from(document.querySelectorAll('#modalOptions input:checked')).map(cb => cb.value);
+      const str = checked.join(', ');
+      document.getElementById(`val_${currentModalType}`).value = str;
+      document.getElementById(`disp_${currentModalType}`).innerText = str || "無";
+      closeModal();
+    }
+
+    // 表單提交
+    async function submitForm(e) {
+      e.preventDefault();
+      const btn = document.getElementById('btnSubmit');
+      btn.disabled = true;
+      btn.innerHTML = `<i data-lucide="loader" class="w-4 h-4 animate-spin"></i> 儲存中...`;
+      lucide.createIcons();
+
+      const record = {
+        year: document.getElementById('dispYear').value,
+        month: document.getElementById('dispMonth').value,
+        day: document.getElementById('dispDay').value,
+        time: document.getElementById('inputTime').value,
+        period: document.getElementById('inputPeriod').value,
+        id: document.getElementById('inputId').value,
+        grade: document.getElementById('inputGrade').value,
+        class: document.getElementById('inputClass').value,
+        seat: document.getElementById('inputSeat').value,
+        name: document.getElementById('inputName').value,
+        gender: document.getElementById('inputGender').value,
+        temp: document.getElementById('inputTemp').value,
+        restTime: document.getElementById('inputRestTime').value,
+        location: document.getElementById('inputLocation').value,
+        bodyPart: document.getElementById('val_bodyPart').value,
+        trauma: document.getElementById('val_trauma').value,
+        internal: document.getElementById('val_internal').value,
+        treatment: document.getElementById('val_treatment').value,
+        notes: document.getElementById('inputNotes').value
+      };
+
+      try {
+        if (SCRIPT_URL !== "YOUR_GAS_WEB_APP_URL_HERE") {
+          await fetch(SCRIPT_URL, {
+            method: "POST",
+            body: JSON.stringify({ action: "addRecord", record: record })
+          });
+        }
+        appData.records.push(record);
+        alert("傷病記錄已成功儲存！");
+        resetForm();
+      } catch (err) {
+        alert("儲存失敗，請檢查網路或 API 設定！");
+        console.error(err);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = `<i data-lucide="save" class="w-4 h-4"></i> 儲存記錄`;
+        lucide.createIcons();
+      }
+    }
+
+    function resetForm() {
+      document.getElementById('recordForm').reset();
+      ['bodyPart', 'trauma', 'internal', 'treatment'].forEach(t => {
+        document.getElementById(`val_${t}`).value = "";
+        document.getElementById(`disp_${t}`).innerText = "無";
+      });
+      initDateDefaults();
+    }
+
+    // 頁籤切換
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+      document.getElementById(tabId).classList.remove('hidden');
+      document.querySelectorAll('.nav-btn').forEach(btn => {
+        btn.classList.remove('border-white', 'text-white');
+        btn.classList.add('border-transparent', 'text-teal-100');
+      });
+      event.currentTarget.classList.add('border-white', 'text-white');
+      event.currentTarget.classList.remove('border-transparent', 'text-teal-100');
+    }
+
+    // 日誌子頁籤切換
+    function setLogSubTab(sub) {
+      logSubTab = sub;
+      ['class', 'date_class', 'date_time'].forEach(s => {
+        const b = document.getElementById(`subTabBtn_${s}`);
+        if (s === sub) {
+          b.className = "px-3 py-1.5 text-xs font-semibold rounded bg-teal-600 text-white";
+        } else {
+          b.className = "px-3 py-1.5 text-xs font-semibold rounded bg-slate-100 text-slate-700";
+        }
+      });
+      // 控制欄位顯隱
+      document.getElementById('queryMonthBox').style.display = sub === 'class' ? 'none' : 'block';
+      document.getElementById('queryDayBox').style.display = sub === 'class' ? 'none' : 'block';
+      document.getElementById('queryGradeBox').style.display = sub === 'class' ? 'block' : 'none';
+      document.getElementById('queryClassBox').style.display = sub === 'class' ? 'block' : 'none';
+      renderLogs();
+    }
+
+    // 渲染日誌表格
+    function renderLogs() {
+      const y = document.getElementById('queryYear').value;
+      const m = document.getElementById('queryMonth').value;
+      const d = document.getElementById('queryDay').value;
+      const g = document.getElementById('queryGrade').value;
+      const c = document.getElementById('queryClass').value;
+
+      let filtered = appData.records.filter(r => String(r.year) === String(y));
+
+      if (logSubTab === 'class') {
+        document.getElementById('logTableTitle').innerText = `${y} 年 ${g || '-'} 年 ${c || '-'} 班 傷病日誌`;
+        if (g) filtered = filtered.filter(r => String(r.grade) === String(g));
+        if (c) filtered = filtered.filter(r => String(r.class) === String(c));
+        filtered.sort((a,b) => (a.month - b.month) || (a.day - b.day));
+      } else if (logSubTab === 'date_class') {
+        document.getElementById('logTableTitle').innerText = `${y} 年 ${m} 月 ${d} 日 傷病日誌 (依班級排序)`;
+        if (m) filtered = filtered.filter(r => String(r.month) === String(m));
+        if (d) filtered = filtered.filter(r => String(r.day) === String(d));
+        filtered.sort((a,b) => (a.grade - b.grade) || (a.class - b.class) || (a.seat - b.seat));
+      } else if (logSubTab === 'date_time') {
+        document.getElementById('logTableTitle').innerText = `${y} 年 ${m} 月 ${d} 日 傷病日誌 (依時間排序)`;
+        if (m) filtered = filtered.filter(r => String(r.month) === String(m));
+        if (d) filtered = filtered.filter(r => String(r.day) === String(d));
+        filtered.sort((a,b) => (a.time || '').localeCompare(b.time || ''));
+      }
+
+      const tbody = document.getElementById('logTableBody');
+      if (filtered.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="14" class="text-center p-4 text-slate-400">查無資料</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = filtered.map(r => `
+        <tr class="hover:bg-slate-50 border-b border-slate-200 text-center">
+          <td class="border border-slate-300 p-1.5">${r.year}</td>
+          <td class="border border-slate-300 p-1.5">${r.month}</td>
+          <td class="border border-slate-300 p-1.5">${r.day}</td>
+          <td class="border border-slate-300 p-1.5">${r.time || ''}</td>
+          <td class="border border-slate-300 p-1.5">${r.period || ''}</td>
+          <td class="border border-slate-300 p-1.5">${r.grade || ''}</td>
+          <td class="border border-slate-300 p-1.5">${r.class || ''}</td>
+          <td class="border border-slate-300 p-1.5">${r.seat || ''}</td>
+          <td class="border border-slate-300 p-1.5 font-medium">${r.name || ''}</td>
+          <td class="border border-slate-300 p-1.5">${r.gender || ''}</td>
+          <td class="border border-slate-300 p-1.5">${r.location || ''}</td>
+          <td class="border border-slate-300 p-1.5 text-left">${[r.bodyPart, r.trauma, r.internal].filter(Boolean).join(' / ')}</td>
+          <td class="border border-slate-300 p-1.5 text-left">${r.treatment || ''}</td>
+          <td class="border border-slate-300 p-1.5 text-left">${r.notes || ''}</td>
+        </tr>
+      `).join('');
+    }
+
+    // 報表子項目切換
+    function setReportType(type) {
+      reportType = type;
+      ['monthCount', 'monthStats', 'yearStats'].forEach(t => {
+        const b = document.getElementById(`repBtn_${t}`);
+        if (t === type) {
+          b.className = "px-3 py-1.5 text-xs font-semibold rounded bg-teal-600 text-white";
+        } else {
+          b.className = "px-3 py-1.5 text-xs font-semibold rounded bg-slate-100 text-slate-700";
+        }
+      });
+      document.getElementById('repMonthWrap').style.display = type === 'yearStats' ? 'none' : 'flex';
+      renderReport();
+    }
+
+    // 渲染統計報表
+    function renderReport() {
+      const y = document.getElementById('repYear').value;
+      const m = document.getElementById('repMonth').value;
+      const container = document.getElementById('reportContainer');
+
+      if (reportType === 'monthCount') {
+        // 1. 傷病人數(分月)
+        let filtered = appData.records.filter(r => String(r.year) === String(y) && String(r.month) === String(m));
+        let groups = {};
+        filtered.forEach(r => {
+          const key = `${r.grade || '未填'}年${r.class || '未填'}班`;
+          if (!groups[key]) groups[key] = { grade: r.grade, class: r.class, male: 0, female: 0, total: 0 };
+          if (r.gender === '男') groups[key].male++;
+          else if (r.gender === '女') groups[key].female++;
+          groups[key].total++;
+        });
+
+        let rows = Object.values(groups).sort((a,b) => (a.grade - b.grade) || (a.class - b.class));
+        container.innerHTML = `
+          <h3 class="text-base font-bold text-center mb-1">傷病人數(分月)</h3>
+          <p class="text-xs text-center text-slate-500 mb-4">${y} 年 ${m} 月</p>
+          <table class="w-full max-w-xl mx-auto text-xs border border-slate-300 text-center">
+            <thead class="bg-slate-100">
+              <tr>
+                <th class="border p-2">年級</th>
+                <th class="border p-2">班級</th>
+                <th class="border p-2">男</th>
+                <th class="border p-2">女</th>
+                <th class="border p-2">合計</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows.length === 0 ? '<tr><td colspan="5" class="p-3 text-slate-400">查無資料</td></tr>' : rows.map(r => `
+                <tr class="hover:bg-slate-50">
+                  <td class="border p-2">${r.grade}</td>
+                  <td class="border p-2">${r.class}</td>
+                  <td class="border p-2">${r.male}</td>
+                  <td class="border p-2">${r.female}</td>
+                  <td class="border p-2 font-bold">${r.total}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        `;
+      } else if (reportType === 'monthStats') {
+        // 2. 傷病統計報表(分月)
+        let filtered = appData.records.filter(r => String(r.year) === String(y) && String(r.month) === String(m));
+        
+        function getCount(category, itemName) {
+          let male = 0, female = 0;
+          filtered.forEach(r => {
+            let val = "";
+            if (category === 'period') val = r.period;
+            if (category === 'location') val = r.location;
+            if (category === 'bodyPart') val = r.bodyPart;
+            if (category === 'trauma') val = r.trauma;
+            if (category === 'internal') val = r.internal;
+
+            if (val && val.includes(itemName)) {
+              if (r.gender === '男') male++;
+              else if (r.gender === '女') female++;
+            }
+          });
+          return { male, female, total: male + female };
+        }
+
+        const buildRows = (catName, items, catKey) => {
+          return items.map((item, idx) => {
+            const res = getCount(catKey, item);
+            return `
+              <tr class="hover:bg-slate-50 text-center">
+                ${idx === 0 ? `<td rowspan="${items.length}" class="border p-2 font-bold bg-slate-50 text-slate-700">${catName}</td>` : ''}
+                <td class="border p-2 text-left">${item}</td>
+                <td class="border p-2">${res.male}</td>
+                <td class="border p-2">${res.female}</td>
+                <td class="border p-2 font-bold">${res.total}</td>
+              </tr>
+            `;
+          }).join('');
+        };
+
+        container.innerHTML = `
+          <h3 class="text-base font-bold text-center mb-1">傷病統計報表(分月)</h3>
+          <p class="text-xs text-center text-slate-500 mb-4">${y} 年 ${m} 月</p>
+          <table class="w-full max-w-2xl mx-auto text-xs border border-slate-300">
+            <thead class="bg-slate-100 text-center">
+              <tr>
+                <th colspan="2" class="border p-2">項目 / 性別</th>
+                <th class="border p-2 w-20">男</th>
+                <th class="border p-2 w-20">女</th>
+                <th class="border p-2 w-20">合計</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${buildRows('時段', ['上午', '中午', '下午'], 'period')}
+              ${buildRows('受傷地點', appData.locations.length ? appData.locations : PRESETS.bodyPart, 'location')}
+              ${buildRows('受傷部位', PRESETS.bodyPart, 'bodyPart')}
+              ${buildRows('外科傷病', PRESETS.trauma, 'trauma')}
+              ${buildRows('內科傷病', PRESETS.internal, 'internal')}
+            </tbody>
+          </table>
+        `;
+      } else if (reportType === 'yearStats') {
+        // 3. 全學年統計報表
+        const months = [8, 9, 10, 11, 12, 1, 2, 3, 4, 5, 6, 7];
+        let filtered = appData.records.filter(r => String(r.year) === String(y));
+
+        container.innerHTML = `
+          <h3 class="text-base font-bold text-center mb-1">學年度傷病統計報表總表</h3>
+          <p class="text-xs text-center text-slate-500 mb-4">${y} 年度</p>
+          <table class="w-full text-[11px] border border-slate-300 text-center">
+            <thead class="bg-slate-100">
+              <tr>
+                <th class="border p-1">學期</th>
+                <th class="border p-1">月份</th>
+                <th class="border p-1">合計</th>
+                <th class="border p-1">男</th>
+                <th class="border p-1">女</th>
+                <th class="border p-1">上午</th>
+                <th class="border p-1">中午</th>
+                <th class="border p-1">下午</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${months.map((mon, idx) => {
+                const list = filtered.filter(r => parseInt(r.month, 10) === mon);
+                const male = list.filter(r => r.gender === '男').length;
+                const female = list.filter(r => r.gender === '女').length;
+                const m1 = list.filter(r => r.period === '上午').length;
+                const m2 = list.filter(r => r.period === '中午').length;
+                const m3 = list.filter(r => r.period === '下午').length;
+                const sem = idx < 6 ? '上學期' : '下學期';
+
+                return `
+                  <tr>
+                    ${(idx === 0 || idx === 6) ? `<td rowspan="6" class="border p-1 font-bold bg-slate-50">${sem}</td>` : ''}
+                    <td class="border p-1">${mon} 月</td>
+                    <td class="border p-1 font-bold">${list.length}</td>
+                    <td class="border p-1">${male}</td>
+                    <td class="border p-1">${female}</td>
+                    <td class="border p-1">${m1}</td>
+                    <td class="border p-1">${m2}</td>
+                    <td class="border p-1">${m3}</td>
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+          </table>
+        `;
+      }
+    }
+  </script>
+</body>
+</html>
