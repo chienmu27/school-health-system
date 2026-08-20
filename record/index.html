@@ -1,0 +1,1349 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>學校健康中心 - 傷病記錄與統計系統 (多校外接版)</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- SheetJS (Excel 解析與匯出套件) -->
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+  <style>
+    @media print {
+      @page {
+        size: landscape;
+        margin: 5mm;
+      }
+      .no-print { display: none !important; }
+      body { background: #fff !important; }
+      .print-area { border: none !important; box-shadow: none !important; padding: 0 !important; width: 100% !important; }
+      table { font-size: 8px !important; }
+      th, td { padding: 2px 1px !important; }
+    }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen flex flex-col">
+
+  <!-- 頂部導航 -->
+  <header class="bg-teal-700 text-white shadow-md no-print">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex flex-wrap justify-between items-center gap-2">
+      <div class="flex items-center space-x-3">
+        <i data-lucide="cross" class="w-8 h-8 text-red-300"></i>
+        <div>
+          <h1 class="text-xl font-bold tracking-wider">學校健康中心傷病記錄系統</h1>
+          <p id="currentSheetText" class="text-[11px] text-teal-200 truncate max-w-xs md:max-w-md">尚未設定學校試算表</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-3">
+        <button onclick="openConfigModal()" class="text-xs bg-teal-800 hover:bg-teal-900 border border-teal-500 px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition">
+          <i data-lucide="settings" class="w-4 h-4 text-teal-300"></i> 試算表設定
+        </button>
+        <div id="statusBadge" class="text-xs bg-teal-900/80 px-3 py-1.5 rounded-full flex items-center gap-2">
+          <span class="w-2 h-2 rounded-full bg-amber-400"></span> 未連線
+        </div>
+      </div>
+    </div>
+    <div class="max-w-7xl mx-auto px-4 flex space-x-1 border-t border-teal-600/50">
+      <button onclick="switchTab('formTab')" class="nav-btn px-4 py-2.5 font-medium border-b-2 border-white text-white flex items-center gap-2"><i data-lucide="edit-3" class="w-4 h-4"></i>傷病登記</button>
+      <button onclick="switchTab('logTab')" class="nav-btn px-4 py-2.5 font-medium border-b-2 border-transparent text-teal-100 hover:text-white flex items-center gap-2"><i data-lucide="list" class="w-4 h-4"></i>日誌查詢</button>
+      <button onclick="switchTab('reportTab')" class="nav-btn px-4 py-2.5 font-medium border-b-2 border-transparent text-teal-100 hover:text-white flex items-center gap-2"><i data-lucide="bar-chart-2" class="w-4 h-4"></i>統計報表</button>
+      <button onclick="switchTab('studentTab')" class="nav-btn px-4 py-2.5 font-medium border-b-2 border-transparent text-teal-100 hover:text-white flex items-center gap-2"><i data-lucide="users" class="w-4 h-4"></i>基本資料管理</button>
+    </div>
+  </header>
+
+  <!-- 主內容區 -->
+  <main class="max-w-7xl mx-auto p-4 md:p-6 w-full flex-grow">
+
+    <!-- 頁籤一：傷病資料登記表 -->
+    <div id="formTab" class="tab-content">
+      <form id="recordForm" onsubmit="submitForm(event)" class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 space-y-6">
+        <div class="flex items-center justify-between border-b pb-3">
+          <h2 class="text-lg font-bold text-teal-800 flex items-center gap-2"><i data-lucide="clipboard-plus" class="w-5 h-5"></i> 新增傷病記錄</h2>
+          <span class="text-xs text-slate-500">* 標記為必填欄位</span>
+        </div>
+
+        <!-- 日期與時間 -->
+        <div class="grid grid-cols-1 md:grid-cols-5 gap-4 bg-slate-50 p-4 rounded-lg">
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">發生日期 *</label>
+            <input type="date" id="inputDate" required onchange="syncDateFields()" class="w-full border rounded px-2.5 py-1.5 text-sm bg-white focus:ring-2 focus:ring-teal-500">
+          </div>
+          <div class="grid grid-cols-3 gap-1">
+            <div>
+              <label class="block text-xs text-slate-500 mb-1">年</label>
+              <input type="text" id="dispYear" readonly class="w-full bg-slate-200 border rounded px-1.5 py-1.5 text-sm text-center font-medium">
+            </div>
+            <div>
+              <label class="block text-xs text-slate-500 mb-1">月</label>
+              <input type="text" id="dispMonth" readonly class="w-full bg-slate-200 border rounded px-1.5 py-1.5 text-sm text-center font-medium">
+            </div>
+            <div>
+              <label class="block text-xs text-slate-500 mb-1">日</label>
+              <input type="text" id="dispDay" readonly class="w-full bg-slate-200 border rounded px-1.5 py-1.5 text-sm text-center font-medium">
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">時間 *</label>
+            <input type="time" id="inputTime" required class="w-full border rounded px-2.5 py-1.5 text-sm bg-white">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">時段 *</label>
+            <select id="inputPeriod" required class="w-full border rounded px-2.5 py-1.5 text-sm bg-white">
+              <option value="上午">上午</option>
+              <option value="中午">中午</option>
+              <option value="下午">下午</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">受傷地點 *</label>
+            <select id="inputLocation" required class="w-full border rounded px-2.5 py-1.5 text-sm bg-white"></select>
+          </div>
+        </div>
+
+        <!-- 學生基本資料 -->
+        <div class="grid grid-cols-2 md:grid-cols-6 gap-4 bg-teal-50/50 p-4 rounded-lg border border-teal-100">
+          <div>
+            <label class="block text-xs font-semibold text-teal-900 mb-1">年級 *</label>
+            <input type="number" id="inputGrade" min="1" max="9" required oninput="matchStudent()" placeholder="如: 4" class="w-full border rounded px-2.5 py-1.5 text-sm bg-white">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-teal-900 mb-1">班級 *</label>
+            <input type="number" id="inputClass" min="1" max="30" required oninput="matchStudent()" placeholder="如: 1" class="w-full border rounded px-2.5 py-1.5 text-sm bg-white">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-teal-900 mb-1">座號 *</label>
+            <input type="number" id="inputSeat" min="1" max="50" required oninput="matchStudent()" placeholder="如: 15" class="w-full border rounded px-2.5 py-1.5 text-sm bg-white">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-teal-900 mb-1">姓名 (自動帶出)</label>
+            <input type="text" id="inputName" required class="w-full border rounded px-2.5 py-1.5 text-sm bg-white">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-teal-900 mb-1">性別</label>
+            <select id="inputGender" class="w-full border rounded px-2.5 py-1.5 text-sm bg-white">
+              <option value="男">男</option>
+              <option value="女">女</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-teal-900 mb-1">學號</label>
+            <input type="text" id="inputId" class="w-full border rounded px-2.5 py-1.5 text-sm bg-white">
+          </div>
+        </div>
+
+        <!-- 體溫與純時間/時分自填休息觀察時間 -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">體溫 (°C)</label>
+            <input type="number" step="0.1" id="inputTemp" placeholder="如 36.5" class="w-full border rounded px-2.5 py-1.5 text-sm bg-white">
+          </div>
+          <div>
+            <div class="flex justify-between items-center mb-1">
+              <label class="block text-xs font-semibold text-slate-600">休息觀察時間 (時 / 分自填)</label>
+              <div class="flex gap-1 text-[11px]">
+                <button type="button" onclick="setQuickRest(0, 10)" class="px-1.5 py-0.5 bg-slate-100 hover:bg-teal-100 text-slate-600 rounded">10分</button>
+                <button type="button" onclick="setQuickRest(0, 20)" class="px-1.5 py-0.5 bg-slate-100 hover:bg-teal-100 text-slate-600 rounded">20分</button>
+                <button type="button" onclick="setQuickRest(0, 30)" class="px-1.5 py-0.5 bg-slate-100 hover:bg-teal-100 text-slate-600 rounded">30分</button>
+                <button type="button" onclick="setQuickRest(1, 0)" class="px-1.5 py-0.5 bg-slate-100 hover:bg-teal-100 text-slate-600 rounded">1小時</button>
+                <button type="button" onclick="setQuickRest('', '')" class="px-1.5 py-0.5 bg-slate-100 hover:bg-red-100 text-slate-500 rounded">清除</button>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <div class="flex items-center bg-white border rounded px-2 py-1 flex-1">
+                <input type="number" id="inputRestHour" min="0" max="23" placeholder="0" class="w-full text-center text-sm outline-none">
+                <span class="text-xs text-slate-400 font-medium ml-1">時</span>
+              </div>
+              <div class="flex items-center bg-white border rounded px-2 py-1 flex-1">
+                <input type="number" id="inputRestMin" min="0" max="59" placeholder="0" class="w-full text-center text-sm outline-none">
+                <span class="text-xs text-slate-400 font-medium ml-1">分</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 彈窗複選欄位項目 -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="border rounded-lg p-3 bg-slate-50">
+            <div class="flex justify-between items-center mb-1">
+              <label class="text-xs font-bold text-slate-700">受傷部位</label>
+              <button type="button" onclick="openModal('bodyPart')" class="text-xs bg-teal-600 text-white px-2.5 py-1 rounded hover:bg-teal-700">選擇部位</button>
+            </div>
+            <div id="disp_bodyPart" class="text-sm min-h-[32px] p-1.5 bg-white border rounded text-slate-600">無</div>
+            <input type="hidden" id="val_bodyPart">
+          </div>
+
+          <div class="border rounded-lg p-3 bg-slate-50">
+            <div class="flex justify-between items-center mb-1">
+              <label class="text-xs font-bold text-slate-700">外科傷病 (意外傷害)</label>
+              <button type="button" onclick="openModal('trauma')" class="text-xs bg-teal-600 text-white px-2.5 py-1 rounded hover:bg-teal-700">選擇外科</button>
+            </div>
+            <div id="disp_trauma" class="text-sm min-h-[32px] p-1.5 bg-white border rounded text-slate-600">無</div>
+            <input type="hidden" id="val_trauma">
+          </div>
+
+          <div class="border rounded-lg p-3 bg-slate-50">
+            <div class="flex justify-between items-center mb-1">
+              <label class="text-xs font-bold text-slate-700">內科傷病 (症狀)</label>
+              <button type="button" onclick="openModal('internal')" class="text-xs bg-teal-600 text-white px-2.5 py-1 rounded hover:bg-teal-700">選擇內科</button>
+            </div>
+            <div id="disp_internal" class="text-sm min-h-[32px] p-1.5 bg-white border rounded text-slate-600">無</div>
+            <input type="hidden" id="val_internal">
+          </div>
+
+          <div class="border rounded-lg p-3 bg-slate-50">
+            <div class="flex justify-between items-center mb-1">
+              <label class="text-xs font-bold text-slate-700">傷病處理方式</label>
+              <button type="button" onclick="openModal('treatment')" class="text-xs bg-teal-600 text-white px-2.5 py-1 rounded hover:bg-teal-700">選擇處置</button>
+            </div>
+            <div id="disp_treatment" class="text-sm min-h-[32px] p-1.5 bg-white border rounded text-slate-600">無</div>
+            <input type="hidden" id="val_treatment">
+          </div>
+        </div>
+
+        <!-- 備註說明 -->
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">備註說明</label>
+          <textarea id="inputNotes" rows="2" placeholder="填寫詳細受傷狀況或處理說明..." class="w-full border rounded px-2.5 py-1.5 text-sm"></textarea>
+        </div>
+
+        <!-- 送出按鈕 -->
+        <div class="flex justify-end gap-3 pt-2">
+          <button type="reset" onclick="resetForm()" class="px-5 py-2 border rounded-lg text-slate-600 hover:bg-slate-50 text-sm font-medium">重設</button>
+          <button type="submit" id="btnSubmit" class="px-6 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 text-sm font-medium flex items-center gap-2">
+            <i data-lucide="save" class="w-4 h-4"></i> 儲存記錄
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <!-- 頁籤二：傷病日誌查詢 -->
+    <div id="logTab" class="tab-content hidden space-y-4">
+      <div class="bg-white p-4 rounded-xl border border-slate-200 space-y-4 no-print">
+        <div class="flex flex-wrap gap-2 border-b pb-3">
+          <button onclick="setLogSubTab('class')" id="subTabBtn_class" class="px-3 py-1.5 text-xs font-semibold rounded bg-teal-600 text-white">1. 分班日誌</button>
+          <button onclick="setLogSubTab('date_class')" id="subTabBtn_date_class" class="px-3 py-1.5 text-xs font-semibold rounded bg-slate-100 text-slate-700">2. 分日(依班級排序)</button>
+          <button onclick="setLogSubTab('date_time')" id="subTabBtn_date_time" class="px-3 py-1.5 text-xs font-semibold rounded bg-slate-100 text-slate-700">3. 分日(依時間排序)</button>
+        </div>
+
+        <div class="grid grid-cols-2 md:grid-cols-6 gap-3 items-end">
+          <div>
+            <label class="block text-xs font-medium text-slate-600 mb-1">年份</label>
+            <input type="number" id="queryYear" class="w-full border rounded px-2 py-1.5 text-sm">
+          </div>
+          <div id="queryMonthBox">
+            <label class="block text-xs font-medium text-slate-600 mb-1">月份</label>
+            <input type="number" id="queryMonth" min="1" max="12" class="w-full border rounded px-2 py-1.5 text-sm">
+          </div>
+          <div id="queryDayBox">
+            <label class="block text-xs font-medium text-slate-600 mb-1">日期</label>
+            <input type="number" id="queryDay" min="1" max="31" class="w-full border rounded px-2 py-1.5 text-sm">
+          </div>
+          <div id="queryGradeBox">
+            <label class="block text-xs font-medium text-slate-600 mb-1">年級</label>
+            <input type="number" id="queryGrade" class="w-full border rounded px-2 py-1.5 text-sm">
+          </div>
+          <div id="queryClassBox">
+            <label class="block text-xs font-medium text-slate-600 mb-1">班級</label>
+            <input type="number" id="queryClass" class="w-full border rounded px-2 py-1.5 text-sm">
+          </div>
+          <div>
+            <button onclick="renderLogs()" class="w-full bg-teal-600 text-white rounded px-3 py-1.5 text-sm font-medium hover:bg-teal-700 flex justify-center items-center gap-1">
+              <i data-lucide="search" class="w-4 h-4"></i> 查詢
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-white p-6 rounded-xl border border-slate-200 print-area overflow-x-auto">
+        <h3 id="logTableTitle" class="text-base font-bold text-center mb-4">傷病日誌</h3>
+        <table class="w-full text-xs text-left border-collapse border border-slate-300">
+          <thead class="bg-slate-100 text-slate-700 text-center">
+            <tr>
+              <th class="border border-slate-300 p-2">年</th>
+              <th class="border border-slate-300 p-2">月</th>
+              <th class="border border-slate-300 p-2">日</th>
+              <th class="border border-slate-300 p-2">時間</th>
+              <th class="border border-slate-300 p-2">時段</th>
+              <th class="border border-slate-300 p-2">年級</th>
+              <th class="border border-slate-300 p-2">班級</th>
+              <th class="border border-slate-300 p-2">座號</th>
+              <th class="border border-slate-300 p-2">姓名</th>
+              <th class="border border-slate-300 p-2">性別</th>
+              <th class="border border-slate-300 p-2">受傷地點</th>
+              <th class="border border-slate-300 p-2">情形 (部位/內外科)</th>
+              <th class="border border-slate-300 p-2">處置</th>
+              <th class="border border-slate-300 p-2">休息觀察時間</th>
+              <th class="border border-slate-300 p-2">備註說明</th>
+            </tr>
+          </thead>
+          <tbody id="logTableBody">
+            <tr><td colspan="15" class="text-center p-4 text-slate-400">請設定篩選條件後點擊查詢</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 頁籤三：統計報表 -->
+    <div id="reportTab" class="tab-content hidden space-y-4">
+      <div class="bg-white p-4 rounded-xl border border-slate-200 flex flex-wrap items-center justify-between gap-4 no-print">
+        <div class="flex gap-2">
+          <button onclick="setReportType('yearStats')" id="repBtn_yearStats" class="px-3 py-1.5 text-xs font-semibold rounded bg-teal-600 text-white">全學年統計總表 (橫向完整)</button>
+          <button onclick="setReportType('monthStats')" id="repBtn_monthStats" class="px-3 py-1.5 text-xs font-semibold rounded bg-slate-100 text-slate-700">傷病統計報表(分月)</button>
+          <button onclick="setReportType('monthCount')" id="repBtn_monthCount" class="px-3 py-1.5 text-xs font-semibold rounded bg-slate-100 text-slate-700">傷病人數(分月)</button>
+        </div>
+        <div class="flex items-center gap-3">
+          <div class="flex items-center gap-1 text-xs">
+            <span>年份:</span>
+            <input type="number" id="repYear" class="border rounded px-2 py-1 w-20 text-sm">
+          </div>
+          <div id="repMonthWrap" class="hidden items-center gap-1 text-xs">
+            <span>月份:</span>
+            <input type="number" id="repMonth" min="1" max="12" class="border rounded px-2 py-1 w-16 text-sm">
+          </div>
+          <button onclick="renderReport()" class="bg-teal-600 text-white px-3 py-1.5 rounded text-xs font-medium hover:bg-teal-700 flex items-center gap-1">
+            <i data-lucide="play" class="w-3.5 h-3.5"></i> 產生報表
+          </button>
+          <button onclick="exportReportToExcel()" class="bg-emerald-600 text-white px-3 py-1.5 rounded text-xs font-medium hover:bg-emerald-700 flex items-center gap-1">
+            <i data-lucide="download" class="w-3.5 h-3.5"></i> 下載 Excel 報表檔
+          </button>
+          <button onclick="window.print()" class="bg-slate-700 text-white px-3 py-1.5 rounded text-xs font-medium hover:bg-slate-800 flex items-center gap-1">
+            <i data-lucide="printer" class="w-3.5 h-3.5"></i> 列印 / 存為橫向 PDF
+          </button>
+        </div>
+      </div>
+
+      <div id="reportContainer" class="bg-white p-4 rounded-xl border border-slate-200 overflow-x-auto print-area min-h-[450px]">
+        <div class="text-center text-slate-400 py-10">請點擊上方「產生報表」按鈕</div>
+      </div>
+    </div>
+
+    <!-- 頁籤四：基本資料管理 -->
+    <div id="studentTab" class="tab-content hidden space-y-6">
+      <div class="bg-gradient-to-r from-teal-50 to-emerald-50 p-5 rounded-xl border border-teal-200 flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h3 class="text-sm font-bold text-teal-900 flex items-center gap-2">
+            <i data-lucide="wrench" class="w-4 h-4 text-teal-700"></i> Google 試算表結構初始化
+          </h3>
+          <p class="text-xs text-teal-700 mt-1">若所連接的 Google 試算表尚未建立「基本資料」與「傷病記錄表」，可點此一鍵自動建立。</p>
+        </div>
+        <button id="btnInitSheet" onclick="triggerInitSheet()" class="bg-teal-700 hover:bg-teal-800 text-white text-xs px-4 py-2 rounded-lg font-medium shadow-sm flex items-center gap-1.5">
+          <i data-lucide="database" class="w-4 h-4"></i> 一鍵初始化試算表
+        </button>
+      </div>
+
+      <div class="bg-white p-6 rounded-xl border border-slate-200 space-y-6">
+        <div class="flex flex-wrap items-center justify-between gap-4 border-b pb-4">
+          <div>
+            <h2 class="text-lg font-bold text-teal-800 flex items-center gap-2">
+              <i data-lucide="file-spreadsheet" class="w-5 h-5"></i> 匯入學生基本資料名冊
+            </h2>
+            <p class="text-xs text-slate-500 mt-1">支援 .xlsx, .xls, .csv 格式。可將檔案直接拖曳進下方區域。</p>
+          </div>
+          <button onclick="downloadStudentTemplate()" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-lg border border-slate-300 flex items-center gap-1.5">
+            <i data-lucide="download" class="w-4 h-4 text-teal-600"></i> 下載標準 Excel 範本
+          </button>
+        </div>
+
+        <!-- 拖曳上傳區塊 -->
+        <div id="dropZone" class="border-2 border-dashed border-slate-300 rounded-xl p-8 text-center bg-slate-50 hover:bg-slate-100 transition-colors cursor-pointer">
+          <input type="file" id="excelFileInput" accept=".xlsx, .xls, .csv" class="hidden" onchange="handleFileSelect(event)">
+          <div class="flex flex-col items-center justify-center space-y-3 pointer-events-none">
+            <i data-lucide="upload-cloud" class="w-12 h-12 text-teal-600 animate-bounce"></i>
+            <p class="text-sm font-semibold text-slate-700">點擊此處選擇 Excel 檔案，或將檔案【直接拖曳至此處】</p>
+            <p class="text-xs text-slate-400">欄位需包含：學號、年級、班級、座號、姓名、性別</p>
+          </div>
+        </div>
+
+        <!-- 預覽與送出 -->
+        <div id="previewArea" class="hidden space-y-4">
+          <div class="flex items-center justify-between bg-teal-50 border border-teal-200 p-3 rounded-lg">
+            <div class="flex items-center gap-2">
+              <i data-lucide="check-circle" class="w-5 h-5 text-teal-600"></i>
+              <span id="previewCount" class="text-sm font-bold text-teal-900"></span>
+            </div>
+            <button id="btnUploadStudents" onclick="uploadStudentsToSheets()" class="bg-teal-600 hover:bg-teal-700 text-white text-xs px-4 py-2 rounded-lg font-medium flex items-center gap-2">
+              <i data-lucide="cloud-upload" class="w-4 h-4"></i> 確認匯入至雲端試算表
+            </button>
+          </div>
+
+          <div class="max-h-60 overflow-y-auto border border-slate-200 rounded-lg">
+            <table class="w-full text-xs text-center border-collapse">
+              <thead class="bg-slate-100 sticky top-0">
+                <tr>
+                  <th class="border p-2">學號</th>
+                  <th class="border p-2">年級</th>
+                  <th class="border p-2">班級</th>
+                  <th class="border p-2">座號</th>
+                  <th class="border p-2">姓名</th>
+                  <th class="border p-2">性別</th>
+                </tr>
+              </thead>
+              <tbody id="previewTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 目前已載入學生清單 -->
+        <div class="border-t pt-4">
+          <div class="flex justify-between items-center mb-3">
+            <h3 class="text-sm font-bold text-slate-700 flex items-center gap-1.5">
+              <i data-lucide="users" class="w-4 h-4 text-slate-500"></i> 目前系統內學生名單 (<span id="currentStudentCount">0</span> 人)
+            </h3>
+            <input type="text" id="searchStudentInput" oninput="filterCurrentStudents()" placeholder="搜尋姓名/學號/班級..." class="border rounded px-2.5 py-1 text-xs w-48">
+          </div>
+          <div class="max-h-60 overflow-y-auto border border-slate-200 rounded-lg">
+            <table class="w-full text-xs text-center border-collapse">
+              <thead class="bg-slate-50 sticky top-0">
+                <tr>
+                  <th class="border p-1.5">學號</th>
+                  <th class="border p-1.5">年級</th>
+                  <th class="border p-1.5">班級</th>
+                  <th class="border p-1.5">座號</th>
+                  <th class="border p-1.5">姓名</th>
+                  <th class="border p-1.5">性別</th>
+                </tr>
+              </thead>
+              <tbody id="currentStudentsTableBody">
+                <tr><td colspan="6" class="p-3 text-slate-400">目前無學生資料</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </main>
+
+  <!-- 學校試算表設定 Modal -->
+  <div id="configModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center p-4 z-50">
+    <div class="bg-white rounded-xl max-w-lg w-full p-6 shadow-2xl space-y-4">
+      <div class="flex justify-between items-center border-b pb-3">
+        <h3 class="text-base font-bold text-slate-800 flex items-center gap-2">
+          <i data-lucide="settings" class="w-5 h-5 text-teal-600"></i> 學校 Google 試算表連線設定
+        </h3>
+        <button onclick="closeConfigModal()" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+
+      <div class="space-y-3 text-xs text-slate-600">
+        <p class="leading-relaxed">
+          請貼上貴校的 <span class="font-bold text-teal-700">Google 試算表完整網址</span> 或 <span class="font-bold text-teal-700">試算表 ID</span>。<br>
+          <span class="text-amber-600">⚠️ 請確認該試算表共用權限設為「知道連結的人均可編輯」或已與外接專案帳號共用。</span>
+        </p>
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">Google 試算表網址 / 試算表 ID</label>
+          <input type="text" id="configSheetInput" placeholder="例如: https://docs.google.com/spreadsheets/d/1BxiMVs0XRA5n.../edit" class="w-full border rounded-lg p-2.5 text-xs bg-slate-50 focus:bg-white focus:ring-2 focus:ring-teal-500">
+        </div>
+      </div>
+
+      <div class="flex justify-end gap-2 border-t pt-4">
+        <button onclick="closeConfigModal()" class="px-4 py-2 text-xs text-slate-600 border rounded-lg hover:bg-slate-50">取消</button>
+        <button onclick="saveSheetConfig()" class="px-4 py-2 text-xs bg-teal-600 text-white rounded-lg hover:bg-teal-700 font-medium flex items-center gap-1.5">
+          <i data-lucide="save" class="w-4 h-4"></i> 儲存並連線
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 彈窗選擇器 Modal -->
+  <div id="multiSelectModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center p-4 z-50">
+    <div class="bg-white rounded-xl max-w-md w-full p-5 shadow-2xl space-y-4">
+      <div class="flex justify-between items-center border-b pb-2">
+        <h3 id="modalTitle" class="font-bold text-slate-800">選擇項目</h3>
+        <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <div id="modalOptions" class="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-60 overflow-y-auto p-1"></div>
+      <div class="flex justify-end gap-2 border-t pt-3">
+        <button onclick="closeModal()" class="px-4 py-1.5 text-xs text-slate-600 border rounded hover:bg-slate-50">取消</button>
+        <button onclick="confirmModalSelection()" class="px-4 py-1.5 text-xs bg-teal-600 text-white rounded hover:bg-teal-700">確認帶入</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // 💡 部署好的外接獨立 Google Apps Script Web App 網址
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxisVOPJqj_BRZldquXSYmuKxi9q2WOb99Z3dMLVCXJt3iNFmdtkM3txTO0EB2b80P9xA/exec";
+
+    // 項目資料定義
+    const PRESETS = {
+      bodyPart: ["頭", "頸", "肩", "胸", "腹", "背", "眼", "顏面", "口腔", "耳鼻喉", "上肢", "腰", "下肢", "臀部", "會陰部"],
+      trauma: ["擦傷", "裂割刺傷", "夾壓傷", "挫撞傷", "扭傷", "灼燙傷", "叮咬傷", "骨折", "舊傷", "外科其它"],
+      internal: ["發燒", "暈眩", "噁心嘔吐", "頭痛", "牙痛", "胃痛", "腹痛", "腹瀉", "經痛", "氣喘", "流鼻血", "疹癢", "眼疾", "內科其它"],
+      treatment: ["傷口護理", "冰敷", "熱敷", "休息觀察", "通知家長", "家長帶回", "校方送醫", "衛生教育", "其它處理"]
+    };
+
+    let currentSheetId = "";
+    let currentModalType = "";
+    let appData = { students: [], locations: [], records: [] };
+    let parsedStudentsForUpload = [];
+    let logSubTab = "class";
+    let reportType = "yearStats";
+
+    window.onload = function() {
+      lucide.createIcons();
+      initDateDefaults();
+      initDragAndDrop();
+      
+      // 讀取設定的 Sheet ID
+      currentSheetId = localStorage.getItem("HEALTH_SHEET_ID") || "";
+      if (currentSheetId) {
+        updateSheetDisplay(currentSheetId);
+        loadLocalCache();
+        fetchInitialData();
+      } else {
+        openConfigModal();
+      }
+      renderReport();
+    };
+
+    // 解析輸入的試算表網址或純 ID
+    function extractSheetId(input) {
+      if (!input) return "";
+      input = input.trim();
+      const match = input.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+      if (match && match[1]) {
+        return match[1];
+      }
+      return input; // 若直接輸入純 ID
+    }
+
+    function openConfigModal() {
+      document.getElementById('configSheetInput').value = currentSheetId;
+      document.getElementById('configModal').classList.remove('hidden');
+      document.getElementById('configModal').classList.add('flex');
+    }
+
+    function closeConfigModal() {
+      document.getElementById('configModal').classList.add('hidden');
+      document.getElementById('configModal').classList.remove('flex');
+    }
+
+    function saveSheetConfig() {
+      const raw = document.getElementById('configSheetInput').value;
+      const parsedId = extractSheetId(raw);
+      if (!parsedId) {
+        alert("請輸入有效的 Google 試算表網址或 ID！");
+        return;
+      }
+      currentSheetId = parsedId;
+      localStorage.setItem("HEALTH_SHEET_ID", currentSheetId);
+      updateSheetDisplay(currentSheetId);
+      closeConfigModal();
+      fetchInitialData();
+    }
+
+    function updateSheetDisplay(id) {
+      document.getElementById('currentSheetText').innerText = `試算表 ID: ${id.substring(0, 8)}...${id.substring(id.length - 6)}`;
+    }
+
+    function loadLocalCache() {
+      try {
+        const cached = localStorage.getItem(`HEALTH_APP_CACHE_${currentSheetId}`);
+        if (cached) {
+          appData = JSON.parse(cached);
+          populateLocations(appData.locations || []);
+          renderCurrentStudentsTable(appData.students || []);
+        } else {
+          populateLocations(["運動場", "遊戲器材", "普通教室", "專科教室", "走廊", "樓梯", "地下室", "體育館活動中心", "廁所", "校外", "其他"]);
+        }
+      } catch(e) {}
+    }
+
+    function initDateDefaults() {
+      const now = new Date();
+      const yyyy = now.getFullYear();
+      const mm = String(now.getMonth() + 1).padStart(2, '0');
+      const dd = String(now.getDate()).padStart(2, '0');
+      const hh = String(now.getHours()).padStart(2, '0');
+      const min = String(now.getMinutes()).padStart(2, '0');
+
+      document.getElementById('inputDate').value = `${yyyy}-${mm}-${dd}`;
+      document.getElementById('inputTime').value = `${hh}:${min}`;
+      document.getElementById('queryYear').value = yyyy;
+      document.getElementById('queryMonth').value = now.getMonth() + 1;
+      document.getElementById('queryDay').value = now.getDate();
+      document.getElementById('repYear').value = yyyy;
+      document.getElementById('repMonth').value = now.getMonth() + 1;
+      syncDateFields();
+    }
+
+    function syncDateFields() {
+      const val = document.getElementById('inputDate').value;
+      if (!val) return;
+      const parts = val.split('-');
+      document.getElementById('dispYear').value = parts[0];
+      document.getElementById('dispMonth').value = parseInt(parts[1], 10);
+      document.getElementById('dispDay').value = parseInt(parts[2], 10);
+    }
+
+    function setQuickRest(hr, min) {
+      document.getElementById('inputRestHour').value = hr;
+      document.getElementById('inputRestMin').value = min;
+    }
+
+    function initDragAndDrop() {
+      const dropZone = document.getElementById('dropZone');
+      const fileInput = document.getElementById('excelFileInput');
+
+      dropZone.addEventListener('click', () => fileInput.click());
+
+      ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+        }, false);
+      });
+
+      ['dragenter', 'dragover'].forEach(eventName => {
+        dropZone.addEventListener(eventName, () => {
+          dropZone.classList.add('border-teal-600', 'bg-teal-50');
+        }, false);
+      });
+
+      ['dragleave', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, () => {
+          dropZone.classList.remove('border-teal-600', 'bg-teal-50');
+        }, false);
+      });
+
+      dropZone.addEventListener('drop', (e) => {
+        const files = e.dataTransfer.files;
+        if (files && files.length > 0) {
+          processExcelFile(files[0]);
+        }
+      }, false);
+    }
+
+    async function fetchInitialData() {
+      if (!currentSheetId) return;
+
+      const badge = document.getElementById('statusBadge');
+      badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-yellow-400 animate-pulse"></span> 背景同步中...`;
+
+      try {
+        const res = await fetch(`${SCRIPT_URL}?action=getInitialData&sheetId=${encodeURIComponent(currentSheetId)}`);
+        const data = await res.json();
+        if (data.status === "success") {
+          appData = data;
+          localStorage.setItem(`HEALTH_APP_CACHE_${currentSheetId}`, JSON.stringify(data));
+          populateLocations(data.locations);
+          renderCurrentStudentsTable(data.students);
+          badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-green-400"></span> 連線正常 (學生: ${data.students.length} 人)`;
+          renderReport();
+        } else {
+          badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-red-400"></span> 連線失敗`;
+          alert("連線失敗：" + data.message);
+        }
+      } catch (err) {
+        badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-slate-400"></span> 離線/快取模式`;
+        console.error(err);
+      }
+    }
+
+    async function triggerInitSheet() {
+      if (!currentSheetId) {
+        alert("請先設定試算表網址！");
+        openConfigModal();
+        return;
+      }
+
+      const btn = document.getElementById('btnInitSheet');
+      btn.disabled = true;
+      btn.innerHTML = `<i data-lucide="loader" class="w-4 h-4 animate-spin"></i> 初始化中...`;
+      lucide.createIcons();
+
+      try {
+        const res = await fetch(SCRIPT_URL, {
+          method: "POST",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify({ action: "initSheet", sheetId: currentSheetId })
+        });
+        const result = await res.json();
+        if (result.status === "success") {
+          alert("🎉 試算表結構初始化成功！「基本資料」與「傷病記錄表」已就緒。");
+          fetchInitialData();
+        } else {
+          alert("❌ 初始化失敗: " + (result.message || "未知原因"));
+        }
+      } catch (err) {
+        alert("連線錯誤: " + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = `<i data-lucide="database" class="w-4 h-4"></i> 一鍵初始化試算表`;
+        lucide.createIcons();
+      }
+    }
+
+    function populateLocations(locations) {
+      const select = document.getElementById('inputLocation');
+      if (!locations || locations.length === 0) return;
+      select.innerHTML = locations.map(loc => `<option value="${loc}">${loc}</option>`).join('');
+    }
+
+    function matchStudent() {
+      const g = document.getElementById('inputGrade').value.trim();
+      const c = document.getElementById('inputClass').value.trim();
+      const s = document.getElementById('inputSeat').value.trim();
+
+      if (g && c && s && appData.students && appData.students.length > 0) {
+        const found = appData.students.find(stu => 
+          String(stu.grade) === g && String(stu.class) === c && String(stu.seat) === s
+        );
+        if (found) {
+          document.getElementById('inputName').value = found.name || "";
+          document.getElementById('inputGender').value = found.gender || "男";
+          document.getElementById('inputId').value = found.id || "";
+        }
+      }
+    }
+
+    function handleFileSelect(e) {
+      const file = e.target.files[0];
+      if (file) processExcelFile(file);
+    }
+
+    function processExcelFile(file) {
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        try {
+          const data = new Uint8Array(evt.target.result);
+          const workbook = XLSX.read(data, { type: 'array' });
+          const firstSheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[firstSheetName];
+          const json = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+
+          if (json.length === 0) {
+            alert("Excel 檔案內無資料！");
+            return;
+          }
+
+          parsedStudentsForUpload = json.map(row => {
+            const findVal = (keys) => {
+              for (let k of keys) {
+                const matched = Object.keys(row).find(field => field.trim().toLowerCase() === k.toLowerCase());
+                if (matched !== undefined) return row[matched];
+              }
+              return "";
+            };
+
+            return {
+              id: String(findVal(["學號", "id", "StudentID", "序號"])).trim(),
+              grade: String(findVal(["年級", "grade", "年"])).trim(),
+              class: String(findVal(["班級", "class", "班"])).trim(),
+              seat: String(findVal(["座號", "seat", "號"])).trim(),
+              name: String(findVal(["姓名", "name", "學生姓名"])).trim(),
+              gender: String(findVal(["性別", "gender"])).trim()
+            };
+          }).filter(s => s.name || s.id);
+
+          if (parsedStudentsForUpload.length === 0) {
+            alert("無法辨識學生資料，請確認 Excel 標題包含：學號、年級、班級、座號、姓名、性別");
+            return;
+          }
+
+          document.getElementById('previewArea').classList.remove('hidden');
+          document.getElementById('previewCount').innerText = `解析成功！共讀取到 ${parsedStudentsForUpload.length} 筆學生資料`;
+          
+          const previewTbody = document.getElementById('previewTableBody');
+          previewTbody.innerHTML = parsedStudentsForUpload.slice(0, 10).map(s => `
+            <tr class="hover:bg-slate-50">
+              <td class="border p-1.5">${s.id}</td>
+              <td class="border p-1.5">${s.grade}</td>
+              <td class="border p-1.5">${s.class}</td>
+              <td class="border p-1.5">${s.seat}</td>
+              <td class="border p-1.5 font-medium">${s.name}</td>
+              <td class="border p-1.5">${s.gender}</td>
+            </tr>
+          `).join('') + (parsedStudentsForUpload.length > 10 ? `<tr><td colspan="6" class="p-2 text-slate-400 text-center">... 僅顯示前 10 筆 ...</td></tr>` : '');
+
+          lucide.createIcons();
+        } catch (e) {
+          alert("Excel 解析失敗: " + e.message);
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    async function uploadStudentsToSheets() {
+      if (!currentSheetId) {
+        alert("請先設定試算表！");
+        return;
+      }
+      if (parsedStudentsForUpload.length === 0) return;
+
+      const btn = document.getElementById('btnUploadStudents');
+      btn.disabled = true;
+      btn.innerHTML = `<i data-lucide="loader" class="w-4 h-4 animate-spin"></i> 匯入中...`;
+      lucide.createIcons();
+
+      try {
+        const res = await fetch(SCRIPT_URL, {
+          method: "POST",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify({
+            action: "importStudents",
+            sheetId: currentSheetId,
+            students: parsedStudentsForUpload
+          })
+        });
+        
+        const result = await res.json();
+        if (result.status === "success") {
+          alert(`🎉 成功匯入 ${result.count} 筆學生資料至 Google 試算表！`);
+          appData.students = parsedStudentsForUpload;
+          localStorage.setItem(`HEALTH_APP_CACHE_${currentSheetId}`, JSON.stringify(appData));
+          renderCurrentStudentsTable(appData.students);
+          document.getElementById('previewArea').classList.add('hidden');
+          document.getElementById('excelFileInput').value = "";
+        } else {
+          alert("❌ 匯入失敗: " + (result.message || "未知錯誤"));
+        }
+      } catch (err) {
+        alert("連線發生錯誤！\n詳細錯誤：" + err.message);
+        console.error(err);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = `<i data-lucide="cloud-upload" class="w-4 h-4"></i> 確認匯入至雲端試算表`;
+        lucide.createIcons();
+      }
+    }
+
+    function renderCurrentStudentsTable(students) {
+      document.getElementById('currentStudentCount').innerText = students ? students.length : 0;
+      const tbody = document.getElementById('currentStudentsTableBody');
+      if (!students || students.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" class="p-3 text-slate-400">目前無學生資料</td></tr>`;
+        return;
+      }
+      tbody.innerHTML = students.map(s => `
+        <tr class="hover:bg-slate-50">
+          <td class="border p-1.5">${s.id || ''}</td>
+          <td class="border p-1.5">${s.grade || ''}</td>
+          <td class="border p-1.5">${s.class || ''}</td>
+          <td class="border p-1.5">${s.seat || ''}</td>
+          <td class="border p-1.5 font-medium">${s.name || ''}</td>
+          <td class="border p-1.5">${s.gender || ''}</td>
+        </tr>
+      `).join('');
+    }
+
+    function filterCurrentStudents() {
+      const q = document.getElementById('searchStudentInput').value.trim().toLowerCase();
+      if (!q) {
+        renderCurrentStudentsTable(appData.students);
+        return;
+      }
+      const filtered = appData.students.filter(s => 
+        String(s.name).toLowerCase().includes(q) ||
+        String(s.id).toLowerCase().includes(q) ||
+        `${s.grade}年${s.class}班`.includes(q)
+      );
+      renderCurrentStudentsTable(filtered);
+    }
+
+    function downloadStudentTemplate() {
+      const templateData = [
+        { "學號": "1001", "年級": 1, "班級": 1, "座號": 1, "姓名": "王小明", "性別": "男" },
+        { "學號": "1002", "年級": 1, "班級": 1, "座號": 2, "姓名": "李小華", "性別": "女" },
+        { "學號": "4001", "年級": 4, "班級": 2, "座號": 15, "姓名": "陳大同", "性別": "男" }
+      ];
+      const ws = XLSX.utils.json_to_sheet(templateData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "學生基本資料範本");
+      XLSX.writeFile(wb, "學校保健室_學生基本資料匯入範本.xlsx");
+    }
+
+    function openModal(type) {
+      currentModalType = type;
+      const titleMap = { bodyPart: "選擇受傷部位", trauma: "選擇外科傷病 (意外傷害)", internal: "選擇內科傷病 (症狀)", treatment: "選擇傷病處理" };
+      document.getElementById('modalTitle').innerText = titleMap[type];
+      
+      const currentValues = (document.getElementById(`val_${type}`).value || "").split(',').map(s => s.trim());
+      const container = document.getElementById('modalOptions');
+      container.innerHTML = PRESETS[type].map(item => `
+        <label class="flex items-center space-x-2 p-2 border rounded hover:bg-slate-50 cursor-pointer text-xs">
+          <input type="checkbox" value="${item}" ${currentValues.includes(item) ? 'checked' : ''} class="rounded text-teal-600">
+          <span>${item}</span>
+        </label>
+      `).join('');
+
+      document.getElementById('multiSelectModal').classList.remove('hidden');
+      document.getElementById('multiSelectModal').classList.add('flex');
+    }
+
+    function closeModal() {
+      document.getElementById('multiSelectModal').classList.add('hidden');
+      document.getElementById('multiSelectModal').classList.remove('flex');
+    }
+
+    function confirmModalSelection() {
+      const checked = Array.from(document.querySelectorAll('#modalOptions input:checked')).map(cb => cb.value);
+      const str = checked.join(', ');
+      document.getElementById(`val_${currentModalType}`).value = str;
+      document.getElementById(`disp_${currentModalType}`).innerText = str || "無";
+      closeModal();
+    }
+
+    async function submitForm(e) {
+      e.preventDefault();
+      if (!currentSheetId) {
+        alert("請先設定試算表！");
+        openConfigModal();
+        return;
+      }
+
+      const btn = document.getElementById('btnSubmit');
+      btn.disabled = true;
+      btn.innerHTML = `<i data-lucide="loader" class="w-4 h-4 animate-spin"></i> 儲存中...`;
+      lucide.createIcons();
+
+      const rHr = document.getElementById('inputRestHour').value.trim();
+      const rMin = document.getElementById('inputRestMin').value.trim();
+      const hNum = parseInt(rHr, 10) || 0;
+      const mNum = parseInt(rMin, 10) || 0;
+      let restTimeText = "";
+      if (hNum > 0 && mNum > 0) restTimeText = `${hNum}時${mNum}分`;
+      else if (hNum > 0 && mNum === 0) restTimeText = `${hNum}小時`;
+      else if (hNum === 0 && mNum > 0) restTimeText = `${mNum}分`;
+
+      const record = {
+        year: document.getElementById('dispYear').value,
+        month: document.getElementById('dispMonth').value,
+        day: document.getElementById('dispDay').value,
+        time: document.getElementById('inputTime').value,
+        period: document.getElementById('inputPeriod').value,
+        id: document.getElementById('inputId').value,
+        grade: document.getElementById('inputGrade').value,
+        class: document.getElementById('inputClass').value,
+        seat: document.getElementById('inputSeat').value,
+        name: document.getElementById('inputName').value,
+        gender: document.getElementById('inputGender').value,
+        temp: document.getElementById('inputTemp').value,
+        restTime: restTimeText,
+        location: document.getElementById('inputLocation').value,
+        bodyPart: document.getElementById('val_bodyPart').value,
+        trauma: document.getElementById('val_trauma').value,
+        internal: document.getElementById('val_internal').value,
+        treatment: document.getElementById('val_treatment').value,
+        notes: document.getElementById('inputNotes').value
+      };
+
+      try {
+        const res = await fetch(SCRIPT_URL, {
+          method: "POST",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify({ action: "addRecord", sheetId: currentSheetId, record: record })
+        });
+        const result = await res.json();
+        if (result.status === "success") {
+          if (!appData.records) appData.records = [];
+          appData.records.push(record);
+          localStorage.setItem(`HEALTH_APP_CACHE_${currentSheetId}`, JSON.stringify(appData));
+          alert("🎉 傷病記錄已成功儲存至 Google 試算表！");
+          resetForm();
+        } else {
+          alert("❌ 儲存失敗: " + result.message);
+        }
+      } catch (err) {
+        alert("儲存失敗，請檢查網路！\n錯誤: " + err.message);
+        console.error(err);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = `<i data-lucide="save" class="w-4 h-4"></i> 儲存記錄`;
+        lucide.createIcons();
+      }
+    }
+
+    function resetForm() {
+      document.getElementById('recordForm').reset();
+      ['bodyPart', 'trauma', 'internal', 'treatment'].forEach(t => {
+        document.getElementById(`val_${t}`).value = "";
+        document.getElementById(`disp_${t}`).innerText = "無";
+      });
+      document.getElementById('inputRestHour').value = "";
+      document.getElementById('inputRestMin').value = "";
+      initDateDefaults();
+    }
+
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+      document.getElementById(tabId).classList.remove('hidden');
+      document.querySelectorAll('.nav-btn').forEach(btn => {
+        btn.classList.remove('border-white', 'text-white');
+        btn.classList.add('border-transparent', 'text-teal-100');
+      });
+      event.currentTarget.classList.add('border-white', 'text-white');
+      event.currentTarget.classList.remove('border-transparent', 'text-teal-100');
+    }
+
+    function setLogSubTab(sub) {
+      logSubTab = sub;
+      ['class', 'date_class', 'date_time'].forEach(s => {
+        const b = document.getElementById(`subTabBtn_${s}`);
+        if (s === sub) b.className = "px-3 py-1.5 text-xs font-semibold rounded bg-teal-600 text-white";
+        else b.className = "px-3 py-1.5 text-xs font-semibold rounded bg-slate-100 text-slate-700";
+      });
+      document.getElementById('queryMonthBox').style.display = sub === 'class' ? 'none' : 'block';
+      document.getElementById('queryDayBox').style.display = sub === 'class' ? 'none' : 'block';
+      document.getElementById('queryGradeBox').style.display = sub === 'class' ? 'block' : 'none';
+      document.getElementById('queryClassBox').style.display = sub === 'class' ? 'block' : 'none';
+      renderLogs();
+    }
+
+    function formatDisplayRestTime(str) {
+      if (!str && str !== 0) return "";
+      str = String(str).trim();
+      const totalMins = parseRestMinutes(str);
+      if (totalMins <= 0) {
+        if (str === "0" || str === "0:00" || str === "00:00" || str === "0分") return "0分";
+        return str;
+      }
+      const h = Math.floor(totalMins / 60);
+      const m = totalMins % 60;
+      if (h > 0 && m > 0) return `${h}時${m}分`;
+      if (h > 0 && m === 0) return `${h}小時`;
+      return `${m}分`;
+    }
+
+    function parseRestMinutes(str) {
+      if (!str && str !== 0) return 0;
+      str = String(str).trim();
+      if (/^\d+$/.test(str)) return parseInt(str, 10);
+      if (/^\d{1,2}:\d{1,2}$/.test(str)) {
+        const parts = str.split(':').map(Number);
+        return (parts[0] || 0) * 60 + (parts[1] || 0);
+      }
+      let total = 0;
+      let hrMatch = str.match(/(\d+)\s*(?:時|小時|hr|h)/i);
+      let minMatch = str.match(/(\d+)\s*(?:分|分鐘|min|m)/i);
+      if (hrMatch) total += parseInt(hrMatch[1], 10) * 60;
+      if (minMatch) total += parseInt(minMatch[1], 10);
+      if (hrMatch || minMatch) return total;
+      return 0;
+    }
+
+    function renderLogs() {
+      const y = document.getElementById('queryYear').value;
+      const m = document.getElementById('queryMonth').value;
+      const d = document.getElementById('queryDay').value;
+      const g = document.getElementById('queryGrade').value;
+      const c = document.getElementById('queryClass').value;
+
+      let filtered = (appData.records || []).filter(r => String(r.year) === String(y));
+
+      if (logSubTab === 'class') {
+        document.getElementById('logTableTitle').innerText = `${y} 年 ${g || '-'} 年 ${c || '-'} 班 傷病日誌`;
+        if (g) filtered = filtered.filter(r => String(r.grade) === String(g));
+        if (c) filtered = filtered.filter(r => String(r.class) === String(c));
+        filtered.sort((a,b) => (a.month - b.month) || (a.day - b.day));
+      } else if (logSubTab === 'date_class') {
+        document.getElementById('logTableTitle').innerText = `${y} 年 ${m} 月 ${d} 日 傷病日誌 (依班級排序)`;
+        if (m) filtered = filtered.filter(r => String(r.month) === String(m));
+        if (d) filtered = filtered.filter(r => String(r.day) === String(d));
+        filtered.sort((a,b) => (a.grade - b.grade) || (a.class - b.class) || (a.seat - b.seat));
+      } else if (logSubTab === 'date_time') {
+        document.getElementById('logTableTitle').innerText = `${y} 年 ${m} 月 ${d} 日 傷病日誌 (依時間排序)`;
+        if (m) filtered = filtered.filter(r => String(r.month) === String(m));
+        if (d) filtered = filtered.filter(r => String(r.day) === String(d));
+        filtered.sort((a,b) => (a.time || '').localeCompare(b.time || ''));
+      }
+
+      const tbody = document.getElementById('logTableBody');
+      if (filtered.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="15" class="text-center p-4 text-slate-400">查無資料</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = filtered.map(r => `
+        <tr class="hover:bg-slate-50 border-b border-slate-200 text-center">
+          <td class="border border-slate-300 p-1.5">${r.year}</td>
+          <td class="border border-slate-300 p-1.5">${r.month}</td>
+          <td class="border border-slate-300 p-1.5">${r.day}</td>
+          <td class="border border-slate-300 p-1.5 font-medium">${r.time || ''}</td>
+          <td class="border border-slate-300 p-1.5">${r.period || ''}</td>
+          <td class="border border-slate-300 p-1.5">${r.grade || ''}</td>
+          <td class="border border-slate-300 p-1.5">${r.class || ''}</td>
+          <td class="border border-slate-300 p-1.5">${r.seat || ''}</td>
+          <td class="border border-slate-300 p-1.5 font-medium">${r.name || ''}</td>
+          <td class="border border-slate-300 p-1.5">${r.gender || ''}</td>
+          <td class="border border-slate-300 p-1.5">${r.location || ''}</td>
+          <td class="border border-slate-300 p-1.5 text-left">${[r.bodyPart, r.trauma, r.internal].filter(Boolean).join(' / ')}</td>
+          <td class="border border-slate-300 p-1.5 text-left">${r.treatment || ''}</td>
+          <td class="border border-slate-300 p-1.5 text-teal-800 font-medium">${formatDisplayRestTime(r.restTime)}</td>
+          <td class="border border-slate-300 p-1.5 text-left">${r.notes || ''}</td>
+        </tr>
+      `).join('');
+    }
+
+    function setReportType(type) {
+      reportType = type;
+      ['yearStats', 'monthStats', 'monthCount'].forEach(t => {
+        const b = document.getElementById(`repBtn_${t}`);
+        if (t === type) b.className = "px-3 py-1.5 text-xs font-semibold rounded bg-teal-600 text-white";
+        else b.className = "px-3 py-1.5 text-xs font-semibold rounded bg-slate-100 text-slate-700";
+      });
+      document.getElementById('repMonthWrap').style.display = type === 'yearStats' ? 'none' : 'flex';
+      renderReport();
+    }
+
+    function isItemMatch(val, target) {
+      if (!val) return false;
+      val = String(val);
+      if (target === "挫撞傷") return val.includes("挫撞傷") || val.includes("跌挫傷");
+      if (target === "外科其它") return val.includes("外科其它") || val.includes("外科其他");
+      if (target === "內科其它") return val.includes("內科其它") || val.includes("內科其他");
+      if (target === "傷口護理") return val.includes("傷口護理") || val.includes("傷口處理");
+      if (target === "其它處理") return val.includes("其它處理") || val.includes("其他處理") || val.includes("處理其他");
+      return val.includes(target);
+    }
+
+    function renderReport() {
+      const y = document.getElementById('repYear').value;
+      const m = document.getElementById('repMonth').value;
+      const container = document.getElementById('reportContainer');
+
+      if (reportType === 'yearStats') {
+        const sem1Months = [8, 9, 10, 11, 12, 1];
+        const sem2Months = [2, 3, 4, 5, 6, 7];
+
+        const locations = ["運動場", "遊戲器材", "普通教室", "專科教室", "走廊", "樓梯", "地下室", "體育館活動中心", "廁所", "校外", "其他"];
+        const bodyParts = ["頭", "頸", "肩", "胸", "腹", "背", "眼", "顏面", "口腔", "耳鼻喉", "上肢", "腰", "下肢", "臀部", "會陰部"];
+        const traumas = ["擦傷", "裂割刺傷", "夾壓傷", "挫撞傷", "扭傷", "灼燙傷", "叮咬傷", "骨折", "舊傷", "外科其它"];
+        const internals = ["發燒", "暈眩", "噁心嘔吐", "頭痛", "牙痛", "胃痛", "腹痛", "腹瀉", "經痛", "氣喘", "流鼻血", "疹癢", "眼疾", "內科其它"];
+        const treatments = ["傷口護理", "冰敷", "熱敷", "休息觀察", "通知家長", "家長帶回", "校方送醫", "衛生教育", "其它處理"];
+
+        let filtered = (appData.records || []).filter(r => String(r.year) === String(y));
+
+        function calcRowStats(records) {
+          const stats = {
+            total: records.length,
+            male: records.filter(r => r.gender === '男').length,
+            female: records.filter(r => r.gender === '女').length,
+            morning: records.filter(r => r.period === '上午').length,
+            noon: records.filter(r => r.period === '中午').length,
+            afternoon: records.filter(r => r.period === '下午').length,
+            locs: {},
+            parts: {},
+            traumas: {},
+            internals: {},
+            treats: {},
+            restMins: records.reduce((sum, r) => sum + parseRestMinutes(r.restTime), 0)
+          };
+
+          locations.forEach(l => stats.locs[l] = records.filter(r => isItemMatch(r.location, l)).length);
+          bodyParts.forEach(b => stats.parts[b] = records.filter(r => isItemMatch(r.bodyPart, b)).length);
+          traumas.forEach(t => stats.traumas[t] = records.filter(r => isItemMatch(r.trauma, t)).length);
+          internals.forEach(i => stats.internals[i] = records.filter(r => isItemMatch(r.internal, i)).length);
+          treatments.forEach(tr => stats.treats[tr] = records.filter(r => isItemMatch(r.treatment, tr)).length);
+
+          return stats;
+        }
+
+        function buildTr(label1, label2, stats, isBold = false) {
+          const cls = isBold ? "font-bold bg-slate-50" : "hover:bg-slate-50";
+          return `
+            <tr class="${cls} text-center border-b border-slate-300">
+              ${label1 !== null ? `<td rowspan="${label1.span}" class="border border-slate-300 p-1 font-bold bg-slate-50 whitespace-nowrap">${label1.text}</td>` : ''}
+              <td class="border border-slate-300 p-1 whitespace-nowrap">${label2}</td>
+              <td class="border border-slate-300 p-1 font-bold">${stats.total}</td>
+              <td class="border border-slate-300 p-1">${stats.male}</td>
+              <td class="border border-slate-300 p-1">${stats.female}</td>
+              <td class="border border-slate-300 p-1">${stats.morning}</td>
+              <td class="border border-slate-300 p-1">${stats.noon}</td>
+              <td class="border border-slate-300 p-1">${stats.afternoon}</td>
+              ${locations.map(l => `<td class="border border-slate-300 p-1">${stats.locs[l] || 0}</td>`).join('')}
+              ${bodyParts.map(b => `<td class="border border-slate-300 p-1">${stats.parts[b] || 0}</td>`).join('')}
+              ${traumas.map(t => `<td class="border border-slate-300 p-1">${stats.traumas[t] || 0}</td>`).join('')}
+              ${internals.map(i => `<td class="border border-slate-300 p-1">${stats.internals[i] || 0}</td>`).join('')}
+              ${treatments.map(tr => `<td class="border border-slate-300 p-1">${stats.treats[tr] || 0}</td>`).join('')}
+              <td class="border border-slate-300 p-1 font-bold text-teal-800">${stats.restMins}</td>
+            </tr>
+          `;
+        }
+
+        const sem1Records = filtered.filter(r => sem1Months.includes(parseInt(r.month, 10)));
+        const sem1Stats = calcRowStats(sem1Records);
+
+        const sem2Records = filtered.filter(r => sem2Months.includes(parseInt(r.month, 10)));
+        const sem2Stats = calcRowStats(sem2Records);
+
+        const totalStats = calcRowStats(filtered);
+
+        let tableHtml = `
+          <div class="mb-3">
+            <h2 class="text-base font-bold text-center tracking-wide text-slate-800">傷病統計報表</h2>
+            <div class="text-xs font-semibold text-slate-600 mt-1">年份：${y} 年度</div>
+          </div>
+          <table id="mainReportTable" class="w-full text-[10px] border-collapse border border-slate-400 text-center">
+            <thead class="bg-slate-100 text-slate-700">
+              <tr>
+                <th rowspan="2" class="border border-slate-400 p-1 whitespace-nowrap">項/學期</th>
+                <th rowspan="2" class="border border-slate-400 p-1 whitespace-nowrap">月份</th>
+                <th rowspan="2" class="border border-slate-400 p-1 whitespace-nowrap font-bold">合計</th>
+                <th colspan="2" class="border border-slate-400 p-1">性別</th>
+                <th colspan="3" class="border border-slate-400 p-1">時間</th>
+                <th colspan="${locations.length}" class="border border-slate-400 p-1">地點</th>
+                <th colspan="${bodyParts.length}" class="border border-slate-400 p-1">部位</th>
+                <th colspan="${traumas.length}" class="border border-slate-400 p-1">受傷種類 (意外傷害)</th>
+                <th colspan="${internals.length}" class="border border-slate-400 p-1">受傷種類 (症狀)</th>
+                <th colspan="${treatments.length}" class="border border-slate-400 p-1">處理方式</th>
+                <th rowspan="2" class="border border-slate-400 p-1 whitespace-nowrap">觀察時間<br>・分</th>
+              </tr>
+              <tr>
+                <th class="border border-slate-400 p-1">男</th>
+                <th class="border border-slate-400 p-1">女</th>
+                <th class="border border-slate-400 p-1">上午</th>
+                <th class="border border-slate-400 p-1">中午</th>
+                <th class="border border-slate-400 p-1">下午</th>
+                ${locations.map(l => `<th class="border border-slate-400 p-1 whitespace-nowrap">${l}</th>`).join('')}
+                ${bodyParts.map(b => `<th class="border border-slate-400 p-1 whitespace-nowrap">${b}</th>`).join('')}
+                ${traumas.map(t => `<th class="border border-slate-400 p-1 whitespace-nowrap">${t}</th>`).join('')}
+                ${internals.map(i => `<th class="border border-slate-400 p-1 whitespace-nowrap">${i}</th>`).join('')}
+                ${treatments.map(tr => `<th class="border border-slate-400 p-1 whitespace-nowrap">${tr}</th>`).join('')}
+              </tr>
+            </thead>
+            <tbody>
+        `;
+
+        sem1Months.forEach((mon, idx) => {
+          const mRecs = filtered.filter(r => parseInt(r.month, 10) === mon);
+          const mStats = calcRowStats(mRecs);
+          const lbl1 = idx === 0 ? { text: "上學期", span: 7 } : null;
+          tableHtml += buildTr(lbl1, `${mon} 月`, mStats);
+        });
+        tableHtml += buildTr(null, "合計", sem1Stats, true);
+
+        sem2Months.forEach((mon, idx) => {
+          const mRecs = filtered.filter(r => parseInt(r.month, 10) === mon);
+          const mStats = calcRowStats(mRecs);
+          const lbl1 = idx === 0 ? { text: "下學期", span: 7 } : null;
+          tableHtml += buildTr(lbl1, `${mon} 月`, mStats);
+        });
+        tableHtml += buildTr(null, "合計", sem2Stats, true);
+
+        tableHtml += `
+            <tr class="font-bold bg-teal-50 text-center border-t-2 border-slate-400">
+              <td colspan="2" class="border border-slate-400 p-1.5 font-bold">總計</td>
+              <td class="border border-slate-400 p-1.5 font-bold">${totalStats.total}</td>
+              <td class="border border-slate-400 p-1.5">${totalStats.male}</td>
+              <td class="border border-slate-400 p-1.5">${totalStats.female}</td>
+              <td class="border border-slate-400 p-1.5">${totalStats.morning}</td>
+              <td class="border border-slate-400 p-1.5">${totalStats.noon}</td>
+              <td class="border border-slate-400 p-1.5">${totalStats.afternoon}</td>
+              ${locations.map(l => `<td class="border border-slate-400 p-1.5">${totalStats.locs[l] || 0}</td>`).join('')}
+              ${bodyParts.map(b => `<td class="border border-slate-400 p-1.5">${totalStats.parts[b] || 0}</td>`).join('')}
+              ${traumas.map(t => `<td class="border border-slate-400 p-1.5">${totalStats.traumas[t] || 0}</td>`).join('')}
+              ${internals.map(i => `<td class="border border-slate-400 p-1.5">${totalStats.internals[i] || 0}</td>`).join('')}
+              ${treatments.map(tr => `<td class="border border-slate-400 p-1.5">${totalStats.treats[tr] || 0}</td>`).join('')}
+              <td class="border border-slate-400 p-1.5 font-bold text-teal-800">${totalStats.restMins}</td>
+            </tr>
+          </tbody>
+        </table>`;
+
+        container.innerHTML = tableHtml;
+
+      } else if (reportType === 'monthStats') {
+        let filtered = (appData.records || []).filter(r => String(r.year) === String(y) && String(r.month) === String(m));
+        
+        function getCount(category, itemName) {
+          let male = 0, female = 0;
+          filtered.forEach(r => {
+            let val = (category === 'period' ? r.period : category === 'location' ? r.location : category === 'bodyPart' ? r.bodyPart : category === 'trauma' ? r.trauma : category === 'internal' ? r.internal : r.treatment) || "";
+            if (isItemMatch(val, itemName)) {
+              if (r.gender === '男') male++;
+              else if (r.gender === '女') female++;
+            }
+          });
+          return { male, female, total: male + female };
+        }
+
+        const buildRows = (catName, items, catKey) => items.map((item, idx) => {
+          const res = getCount(catKey, item);
+          return `
+            <tr class="hover:bg-slate-50 text-center">
+              ${idx === 0 ? `<td rowspan="${items.length}" class="border p-2 font-bold bg-slate-50 text-slate-700">${catName}</td>` : ''}
+              <td class="border p-2 text-left">${item}</td>
+              <td class="border p-2">${res.male}</td>
+              <td class="border p-2">${res.female}</td>
+              <td class="border p-2 font-bold">${res.total}</td>
+            </tr>
+          `;
+        }).join('');
+
+        const totalRestMinutes = filtered.reduce((sum, r) => sum + parseRestMinutes(r.restTime), 0);
+
+        container.innerHTML = `
+          <div class="max-w-2xl mx-auto">
+            <h3 class="text-base font-bold text-center mb-1">傷病統計報表(分月)</h3>
+            <p class="text-xs text-center text-slate-500 mb-4">${y} 年 ${m} 月</p>
+            <table id="mainReportTable" class="w-full text-xs border border-slate-300">
+              <thead class="bg-slate-100 text-center">
+                <tr><th colspan="2" class="border p-2">項目 / 性別</th><th class="border p-2 w-20">男</th><th class="border p-2 w-20">女</th><th class="border p-2 w-20">合計</th></tr>
+              </thead>
+              <tbody>
+                ${buildRows('時段', ['上午', '中午', '下午'], 'period')}
+                ${buildRows('受傷地點', appData.locations || [], 'location')}
+                ${buildRows('受傷部位', PRESETS.bodyPart, 'bodyPart')}
+                ${buildRows('意外傷害 (外科)', PRESETS.trauma, 'trauma')}
+                ${buildRows('症狀 (內科)', PRESETS.internal, 'internal')}
+                ${buildRows('處理方式', PRESETS.treatment, 'treatment')}
+                <tr class="font-bold bg-teal-50 text-center">
+                  <td colspan="2" class="border p-2">觀察時間總計 (分鐘)</td>
+                  <td colspan="3" class="border p-2 text-teal-800 font-bold">${totalRestMinutes} 分鐘</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        `;
+      } else if (reportType === 'monthCount') {
+        let filtered = (appData.records || []).filter(r => String(r.year) === String(y) && String(r.month) === String(m));
+        let groups = {};
+        filtered.forEach(r => {
+          const key = `${r.grade || '未填'}年${r.class || '未填'}班`;
+          if (!groups[key]) groups[key] = { grade: r.grade, class: r.class, male: 0, female: 0, total: 0 };
+          if (r.gender === '男') groups[key].male++;
+          else if (r.gender === '女') groups[key].female++;
+          groups[key].total++;
+        });
+
+        let rows = Object.values(groups).sort((a,b) => (a.grade - b.grade) || (a.class - b.class));
+        container.innerHTML = `
+          <div class="max-w-xl mx-auto">
+            <h3 class="text-base font-bold text-center mb-1">傷病人數(分月)</h3>
+            <p class="text-xs text-center text-slate-500 mb-4">${y} 年 ${m} 月</p>
+            <table id="mainReportTable" class="w-full text-xs border border-slate-300 text-center">
+              <thead class="bg-slate-100">
+                <tr><th class="border p-2">年級</th><th class="border p-2">班級</th><th class="border p-2">男</th><th class="border p-2">女</th><th class="border p-2">合計</th></tr>
+              </thead>
+              <tbody>
+                ${rows.length === 0 ? '<tr><td colspan="5" class="p-3 text-slate-400">查無資料</td></tr>' : rows.map(r => `
+                  <tr class="hover:bg-slate-50">
+                    <td class="border p-2">${r.grade}</td><td class="border p-2">${r.class}</td><td class="border p-2">${r.male}</td><td class="border p-2">${r.female}</td><td class="border p-2 font-bold">${r.total}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        `;
+      }
+      lucide.createIcons();
+    }
+
+    function exportReportToExcel() {
+      const table = document.getElementById('mainReportTable');
+      if (!table) {
+        alert("請先點擊「產生報表」！");
+        return;
+      }
+      const y = document.getElementById('repYear').value;
+      const typeNames = { yearStats: `${y}學年度_全學年傷病統計總表`, monthStats: `${y}年_傷病統計報表(分月)`, monthCount: `${y}年_傷病人數(分月)` };
+      const filename = `${typeNames[reportType] || '傷病統計報表'}.xlsx`;
+
+      const wb = XLSX.utils.table_to_book(table, { sheet: "傷病統計報表" });
+      XLSX.writeFile(wb, filename);
+    }
+  </script>
+</body>
+</html>
