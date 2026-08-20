@@ -277,7 +277,7 @@
       </div>
     </div>
 
-    <!-- 頁籤三：統計報表 (對應上傳之 PDF 格式) -->
+    <!-- 頁籤三：統計報表 -->
     <div id="reportTab" class="tab-content hidden space-y-4">
       <div class="bg-white p-4 rounded-xl border border-slate-200 flex flex-wrap items-center justify-between gap-4 no-print">
         <div class="flex gap-2">
@@ -496,7 +496,6 @@
       document.getElementById('inputRestMin').value = min;
     }
 
-    // 拖曳上傳支援
     function initDragAndDrop() {
       const dropZone = document.getElementById('dropZone');
       const fileInput = document.getElementById('excelFileInput');
@@ -884,26 +883,13 @@
       renderLogs();
     }
 
-    // 格式化發生時間 (如: 13:08)
-    function formatDisplayTime(str) {
-      if (!str) return "";
-      str = String(str).trim();
-      if (str.includes("T") && str.includes("Z")) {
-        const d = new Date(str);
-        if (!isNaN(d.getTime())) {
-          return `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
-        }
-      }
-      return str;
-    }
-
-    // 格式化觀察時間字串 (如: 20分、1時20分)
+    // 格式化觀察時間字串 (如: 0:20 -> 20分)
     function formatDisplayRestTime(str) {
-      if (!str) return "";
+      if (!str && str !== 0) return "";
       str = String(str).trim();
       const totalMins = parseRestMinutes(str);
       if (totalMins <= 0) {
-        if (str === "0" || str === "0分") return "0分";
+        if (str === "0" || str === "0:00" || str === "00:00" || str === "0分") return "0分";
         return str;
       }
       const h = Math.floor(totalMins / 60);
@@ -913,33 +899,31 @@
       return `${m}分`;
     }
 
-    // 解析觀察時間為「總分鐘數」
+    // 解析觀察時間為「精確總分鐘數」
     function parseRestMinutes(str) {
-      if (!str) return 0;
+      if (!str && str !== 0) return 0;
       str = String(str).trim();
 
-      // 1. 若為 ISO 日期字串 (如 1899-12-30T08:20:00.000Z)
-      if (str.includes("T") && str.includes("Z")) {
-        const d = new Date(str);
-        if (!isNaN(d.getTime())) {
-          return d.getUTCHours() * 60 + d.getUTCMinutes();
-        }
+      // 1. 純數字（如 20）
+      if (/^\d+$/.test(str)) {
+        return parseInt(str, 10);
       }
 
-      // 2. 若為 HH:mm 格式 (如 01:20 或 00:20)
-      if (/^\d{1,2}:\d{2}$/.test(str)) {
+      // 2. 時:分 格式（如 0:20、00:20、1:15）
+      if (/^\d{1,2}:\d{1,2}$/.test(str)) {
         const parts = str.split(':').map(Number);
         return (parts[0] || 0) * 60 + (parts[1] || 0);
       }
 
-      // 3. 若為中文字串 (如 1時20分 / 1小時 / 20分)
+      // 3. 中文格式（如 1時20分 / 1小時 / 20分 / 20分鐘）
       let total = 0;
       let hrMatch = str.match(/(\d+)\s*(?:時|小時|hr|h)/i);
       let minMatch = str.match(/(\d+)\s*(?:分|分鐘|min|m)/i);
       if (hrMatch) total += parseInt(hrMatch[1], 10) * 60;
       if (minMatch) total += parseInt(minMatch[1], 10);
-      if (!hrMatch && !minMatch && /^\d+$/.test(str)) total += parseInt(str, 10);
-      return total;
+      if (hrMatch || minMatch) return total;
+
+      return 0;
     }
 
     function renderLogs() {
@@ -979,7 +963,7 @@
           <td class="border border-slate-300 p-1.5">${r.year}</td>
           <td class="border border-slate-300 p-1.5">${r.month}</td>
           <td class="border border-slate-300 p-1.5">${r.day}</td>
-          <td class="border border-slate-300 p-1.5 font-medium">${formatDisplayTime(r.time)}</td>
+          <td class="border border-slate-300 p-1.5 font-medium">${r.time || ''}</td>
           <td class="border border-slate-300 p-1.5">${r.period || ''}</td>
           <td class="border border-slate-300 p-1.5">${r.grade || ''}</td>
           <td class="border border-slate-300 p-1.5">${r.class || ''}</td>
