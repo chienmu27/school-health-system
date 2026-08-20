@@ -56,7 +56,7 @@
           <span class="text-xs text-slate-500">* 標記為必填欄位</span>
         </div>
 
-        <!-- 日期與時間 -->
+        <!-- 日期與時間 (時段自動依時間判斷) -->
         <div class="grid grid-cols-1 md:grid-cols-5 gap-4 bg-slate-50 p-4 rounded-lg">
           <div>
             <label class="block text-xs font-semibold text-slate-600 mb-1">發生日期 *</label>
@@ -78,14 +78,14 @@
           </div>
           <div>
             <label class="block text-xs font-semibold text-slate-600 mb-1">時間 *</label>
-            <input type="time" id="inputTime" required class="w-full border rounded px-2.5 py-1.5 text-sm bg-white">
+            <input type="time" id="inputTime" required onchange="autoSetPeriodFromTime()" class="w-full border rounded px-2.5 py-1.5 text-sm bg-white">
           </div>
           <div>
-            <label class="block text-xs font-semibold text-slate-600 mb-1">時段 *</label>
-            <select id="inputPeriod" required class="w-full border rounded px-2.5 py-1.5 text-sm bg-white">
-              <option value="上午">上午</option>
-              <option value="中午">中午</option>
-              <option value="下午">下午</option>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">時段 (自動判斷) *</label>
+            <select id="inputPeriod" required class="w-full border rounded px-2.5 py-1.5 text-sm bg-white font-medium text-teal-800">
+              <option value="上午">上午 (07:00~12:00)</option>
+              <option value="中午">中午 (12:01~13:30)</option>
+              <option value="下午">下午 (13:31~18:00)</option>
             </select>
           </div>
           <div>
@@ -479,7 +479,9 @@
       document.getElementById('queryDay').value = now.getDate();
       document.getElementById('repYear').value = yyyy;
       document.getElementById('repMonth').value = now.getMonth() + 1;
+      
       syncDateFields();
+      autoSetPeriodFromTime(); // 依時間自動設定時段
     }
 
     function syncDateFields() {
@@ -489,6 +491,30 @@
       document.getElementById('dispYear').value = parts[0];
       document.getElementById('dispMonth').value = parseInt(parts[1], 10);
       document.getElementById('dispDay').value = parseInt(parts[2], 10);
+    }
+
+    // 依據時間自動判斷「時段」下拉選單
+    function autoSetPeriodFromTime() {
+      const timeVal = document.getElementById('inputTime').value;
+      if (!timeVal) return;
+      const parts = timeVal.split(':').map(Number);
+      if (parts.length < 2 || isNaN(parts[0]) || isNaN(parts[1])) return;
+      
+      const totalMins = parts[0] * 60 + parts[1];
+
+      // 1. 上午：12:00 以前 (totalMins <= 720)
+      // 2. 中午：12:01 ~ 13:30 (totalMins 721 ~ 810)
+      // 3. 下午：13:31 以後 (totalMins >= 811)
+      let period = "上午";
+      if (totalMins >= 721 && totalMins <= 810) {
+        period = "中午";
+      } else if (totalMins >= 811) {
+        period = "下午";
+      } else {
+        period = "上午";
+      }
+
+      document.getElementById('inputPeriod').value = period;
     }
 
     function setQuickRest(hr, min) {
@@ -904,18 +930,15 @@
       if (!str && str !== 0) return 0;
       str = String(str).trim();
 
-      // 1. 純數字（如 20）
       if (/^\d+$/.test(str)) {
         return parseInt(str, 10);
       }
 
-      // 2. 時:分 格式（如 0:20、00:20、1:15）
       if (/^\d{1,2}:\d{1,2}$/.test(str)) {
         const parts = str.split(':').map(Number);
         return (parts[0] || 0) * 60 + (parts[1] || 0);
       }
 
-      // 3. 中文格式（如 1時20分 / 1小時 / 20分 / 20分鐘）
       let total = 0;
       let hrMatch = str.match(/(\d+)\s*(?:時|小時|hr|h)/i);
       let minMatch = str.match(/(\d+)\s*(?:分|分鐘|min|m)/i);
