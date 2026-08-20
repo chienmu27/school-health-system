@@ -338,7 +338,7 @@
           </button>
         </div>
 
-        <!-- 拖曳上傳區塊 (已補齊完整事件監聽) -->
+        <!-- 拖曳上傳區塊 -->
         <div id="dropZone" class="border-2 border-dashed border-slate-300 rounded-xl p-8 text-center bg-slate-50 hover:bg-slate-100 transition-colors cursor-pointer">
           <input type="file" id="excelFileInput" accept=".xlsx, .xls, .csv" class="hidden" onchange="handleFileSelect(event)">
           <div class="flex flex-col items-center justify-center space-y-3 pointer-events-none">
@@ -428,7 +428,7 @@
     // 💡 您的 Google Apps Script 網頁應用程式網址
     const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzrj3zebgP_k8y591eiSQRNyHcdqkZ5s-GTSN2bOMaX8AZr3GDV6HmCwx6OmO6e1wTJ/exec";
 
-    // 項目資料定義 (對齊 PDF 欄位)
+    // 項目資料定義
     const PRESETS = {
       bodyPart: ["頭", "頸", "肩", "胸", "腹", "背", "眼", "顏面", "口腔", "耳鼻喉", "上肢", "腰", "下肢", "臀部", "會陰部"],
       trauma: ["擦傷", "裂割刺傷", "夾壓傷", "挫撞傷", "扭傷", "灼燙傷", "叮咬傷", "骨折", "舊傷", "外科其它"],
@@ -793,10 +793,12 @@
 
       const rHr = document.getElementById('inputRestHour').value.trim();
       const rMin = document.getElementById('inputRestMin').value.trim();
+      const hNum = parseInt(rHr, 10) || 0;
+      const mNum = parseInt(rMin, 10) || 0;
       let restTimeText = "";
-      if (rHr && rMin) restTimeText = `${rHr}時${rMin}分`;
-      else if (rHr && !rMin) restTimeText = `${rHr}小時`;
-      else if (!rHr && rMin) restTimeText = `${rMin}分`;
+      if (hNum > 0 && mNum > 0) restTimeText = `${hNum}時${mNum}分`;
+      else if (hNum > 0 && mNum === 0) restTimeText = `${hNum}小時`;
+      else if (hNum === 0 && mNum > 0) restTimeText = `${mNum}分`;
 
       const record = {
         year: document.getElementById('dispYear').value,
@@ -882,6 +884,64 @@
       renderLogs();
     }
 
+    // 格式化發生時間 (如: 13:08)
+    function formatDisplayTime(str) {
+      if (!str) return "";
+      str = String(str).trim();
+      if (str.includes("T") && str.includes("Z")) {
+        const d = new Date(str);
+        if (!isNaN(d.getTime())) {
+          return `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
+        }
+      }
+      return str;
+    }
+
+    // 格式化觀察時間字串 (如: 20分、1時20分)
+    function formatDisplayRestTime(str) {
+      if (!str) return "";
+      str = String(str).trim();
+      const totalMins = parseRestMinutes(str);
+      if (totalMins <= 0) {
+        if (str === "0" || str === "0分") return "0分";
+        return str;
+      }
+      const h = Math.floor(totalMins / 60);
+      const m = totalMins % 60;
+      if (h > 0 && m > 0) return `${h}時${m}分`;
+      if (h > 0 && m === 0) return `${h}小時`;
+      return `${m}分`;
+    }
+
+    // 解析觀察時間為「總分鐘數」
+    function parseRestMinutes(str) {
+      if (!str) return 0;
+      str = String(str).trim();
+
+      // 1. 若為 ISO 日期字串 (如 1899-12-30T08:20:00.000Z)
+      if (str.includes("T") && str.includes("Z")) {
+        const d = new Date(str);
+        if (!isNaN(d.getTime())) {
+          return d.getUTCHours() * 60 + d.getUTCMinutes();
+        }
+      }
+
+      // 2. 若為 HH:mm 格式 (如 01:20 或 00:20)
+      if (/^\d{1,2}:\d{2}$/.test(str)) {
+        const parts = str.split(':').map(Number);
+        return (parts[0] || 0) * 60 + (parts[1] || 0);
+      }
+
+      // 3. 若為中文字串 (如 1時20分 / 1小時 / 20分)
+      let total = 0;
+      let hrMatch = str.match(/(\d+)\s*(?:時|小時|hr|h)/i);
+      let minMatch = str.match(/(\d+)\s*(?:分|分鐘|min|m)/i);
+      if (hrMatch) total += parseInt(hrMatch[1], 10) * 60;
+      if (minMatch) total += parseInt(minMatch[1], 10);
+      if (!hrMatch && !minMatch && /^\d+$/.test(str)) total += parseInt(str, 10);
+      return total;
+    }
+
     function renderLogs() {
       const y = document.getElementById('queryYear').value;
       const m = document.getElementById('queryMonth').value;
@@ -919,7 +979,7 @@
           <td class="border border-slate-300 p-1.5">${r.year}</td>
           <td class="border border-slate-300 p-1.5">${r.month}</td>
           <td class="border border-slate-300 p-1.5">${r.day}</td>
-          <td class="border border-slate-300 p-1.5">${r.time || ''}</td>
+          <td class="border border-slate-300 p-1.5 font-medium">${formatDisplayTime(r.time)}</td>
           <td class="border border-slate-300 p-1.5">${r.period || ''}</td>
           <td class="border border-slate-300 p-1.5">${r.grade || ''}</td>
           <td class="border border-slate-300 p-1.5">${r.class || ''}</td>
@@ -929,7 +989,7 @@
           <td class="border border-slate-300 p-1.5">${r.location || ''}</td>
           <td class="border border-slate-300 p-1.5 text-left">${[r.bodyPart, r.trauma, r.internal].filter(Boolean).join(' / ')}</td>
           <td class="border border-slate-300 p-1.5 text-left">${r.treatment || ''}</td>
-          <td class="border border-slate-300 p-1.5">${r.restTime || ''}</td>
+          <td class="border border-slate-300 p-1.5 text-teal-800 font-medium">${formatDisplayRestTime(r.restTime)}</td>
           <td class="border border-slate-300 p-1.5 text-left">${r.notes || ''}</td>
         </tr>
       `).join('');
@@ -946,20 +1006,6 @@
       renderReport();
     }
 
-    // 解析觀察時間 (分鐘數)
-    function parseRestMinutes(str) {
-      if (!str) return 0;
-      str = String(str).trim();
-      let total = 0;
-      let hrMatch = str.match(/(\d+)\s*(?:時|小時|hr|h)/i);
-      let minMatch = str.match(/(\d+)\s*(?:分|分鐘|min|m)/i);
-      if (hrMatch) total += parseInt(hrMatch[1], 10) * 60;
-      if (minMatch) total += parseInt(minMatch[1], 10);
-      if (!hrMatch && !minMatch && /^\d+$/.test(str)) total += parseInt(str, 10);
-      return total;
-    }
-
-    // 模糊項目比對
     function isItemMatch(val, target) {
       if (!val) return false;
       val = String(val);
@@ -971,14 +1017,12 @@
       return val.includes(target);
     }
 
-    // 渲染報表
     function renderReport() {
       const y = document.getElementById('repYear').value;
       const m = document.getElementById('repMonth').value;
       const container = document.getElementById('reportContainer');
 
       if (reportType === 'yearStats') {
-        // 全學年橫向統計總表 (完全依據 PDF 9 頁之格式)
         const sem1Months = [8, 9, 10, 11, 12, 1];
         const sem2Months = [2, 3, 4, 5, 6, 7];
 
@@ -1037,15 +1081,12 @@
           `;
         }
 
-        // 上學期計算
         const sem1Records = filtered.filter(r => sem1Months.includes(parseInt(r.month, 10)));
         const sem1Stats = calcRowStats(sem1Records);
 
-        // 下學期計算
         const sem2Records = filtered.filter(r => sem2Months.includes(parseInt(r.month, 10)));
         const sem2Stats = calcRowStats(sem2Records);
 
-        // 全學年總計
         const totalStats = calcRowStats(filtered);
 
         let tableHtml = `
@@ -1084,7 +1125,6 @@
             <tbody>
         `;
 
-        // 渲染上學期 8~1 月
         sem1Months.forEach((mon, idx) => {
           const mRecs = filtered.filter(r => parseInt(r.month, 10) === mon);
           const mStats = calcRowStats(mRecs);
@@ -1093,7 +1133,6 @@
         });
         tableHtml += buildTr(null, "合計", sem1Stats, true);
 
-        // 渲染下學期 2~7 月
         sem2Months.forEach((mon, idx) => {
           const mRecs = filtered.filter(r => parseInt(r.month, 10) === mon);
           const mStats = calcRowStats(mRecs);
@@ -1102,7 +1141,6 @@
         });
         tableHtml += buildTr(null, "合計", sem2Stats, true);
 
-        // 總計列
         tableHtml += `
             <tr class="font-bold bg-teal-50 text-center border-t-2 border-slate-400">
               <td colspan="2" class="border border-slate-400 p-1.5 font-bold">總計</td>
@@ -1125,7 +1163,6 @@
         container.innerHTML = tableHtml;
 
       } else if (reportType === 'monthStats') {
-        // 傷病統計報表(分月)
         let filtered = (appData.records || []).filter(r => String(r.year) === String(y) && String(r.month) === String(m));
         
         function getCount(category, itemName) {
@@ -1153,6 +1190,8 @@
           `;
         }).join('');
 
+        const totalRestMinutes = filtered.reduce((sum, r) => sum + parseRestMinutes(r.restTime), 0);
+
         container.innerHTML = `
           <div class="max-w-2xl mx-auto">
             <h3 class="text-base font-bold text-center mb-1">傷病統計報表(分月)</h3>
@@ -1168,12 +1207,15 @@
                 ${buildRows('意外傷害 (外科)', PRESETS.trauma, 'trauma')}
                 ${buildRows('症狀 (內科)', PRESETS.internal, 'internal')}
                 ${buildRows('處理方式', PRESETS.treatment, 'treatment')}
+                <tr class="font-bold bg-teal-50 text-center">
+                  <td colspan="2" class="border p-2">觀察時間總計 (分鐘)</td>
+                  <td colspan="3" class="border p-2 text-teal-800 font-bold">${totalRestMinutes} 分鐘</td>
+                </tr>
               </tbody>
             </table>
           </div>
         `;
       } else if (reportType === 'monthCount') {
-        // 傷病人數(分月)
         let filtered = (appData.records || []).filter(r => String(r.year) === String(y) && String(r.month) === String(m));
         let groups = {};
         filtered.forEach(r => {
@@ -1207,7 +1249,6 @@
       lucide.createIcons();
     }
 
-    // 匯出報表為 Excel (.xlsx) 檔案
     function exportReportToExcel() {
       const table = document.getElementById('mainReportTable');
       if (!table) {
