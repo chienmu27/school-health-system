@@ -542,7 +542,7 @@
 async function uploadStudentsToSheets() {
   if (parsedStudentsForUpload.length === 0) return;
   
-  if (SCRIPT_URL === "YOUR_GAS_WEB_APP_URL_HERE" || !SCRIPT_URL.startsWith("https://script.google.com")) {
+  if (SCRIPT_URL === "https://script.google.com/macros/s/AKfycbzrj3zebgP_k8y591eiSQRNyHcdqkZ5s-GTSN2bOMaX8AZr3GDV6HmCwx6OmO6e1wTJ/exec")) {
     alert("請先在 index.html 中設定正確的 SCRIPT_URL！");
     return;
   }
