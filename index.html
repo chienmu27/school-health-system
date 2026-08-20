@@ -3,9 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>學校健康中心 - 傷病記錄與統計系統</title>
+  <title>學校健康中心 - 傷病記錄與管理系統</title>
+  <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons -->
   <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- SheetJS (Excel 讀取與產生套件) -->
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
   <style>
     @media print {
       .no-print { display: none !important; }
@@ -30,6 +34,7 @@
       <button onclick="switchTab('formTab')" class="nav-btn px-4 py-2.5 font-medium border-b-2 border-white text-white flex items-center gap-2"><i data-lucide="edit-3" class="w-4 h-4"></i>傷病登記</button>
       <button onclick="switchTab('logTab')" class="nav-btn px-4 py-2.5 font-medium border-b-2 border-transparent text-teal-100 hover:text-white flex items-center gap-2"><i data-lucide="list" class="w-4 h-4"></i>日誌查詢</button>
       <button onclick="switchTab('reportTab')" class="nav-btn px-4 py-2.5 font-medium border-b-2 border-transparent text-teal-100 hover:text-white flex items-center gap-2"><i data-lucide="bar-chart-2" class="w-4 h-4"></i>統計報表</button>
+      <button onclick="switchTab('studentTab')" class="nav-btn px-4 py-2.5 font-medium border-b-2 border-transparent text-teal-100 hover:text-white flex items-center gap-2"><i data-lucide="users" class="w-4 h-4"></i>基本資料管理</button>
     </div>
   </header>
 
@@ -82,7 +87,7 @@
           </div>
         </div>
 
-        <!-- 學生基本資料 (自動比對) -->
+        <!-- 學生基本資料 (輸入年級/班級/座號自動比對) -->
         <div class="grid grid-cols-2 md:grid-cols-6 gap-4 bg-teal-50/50 p-4 rounded-lg border border-teal-100">
           <div>
             <label class="block text-xs font-semibold text-teal-900 mb-1">年級 *</label>
@@ -189,7 +194,6 @@
           <button onclick="setLogSubTab('date_time')" id="subTabBtn_date_time" class="px-3 py-1.5 text-xs font-semibold rounded bg-slate-100 text-slate-700">3. 分日(依時間排序)</button>
         </div>
 
-        <!-- 篩選條件區 -->
         <div class="grid grid-cols-2 md:grid-cols-6 gap-3 items-end">
           <div>
             <label class="block text-xs font-medium text-slate-600 mb-1">年份</label>
@@ -219,7 +223,6 @@
         </div>
       </div>
 
-      <!-- 日誌輸出表格 -->
       <div class="bg-white p-6 rounded-xl border border-slate-200 print-area overflow-x-auto">
         <h3 id="logTableTitle" class="text-base font-bold text-center mb-4">傷病日誌</h3>
         <table class="w-full text-xs text-left border-collapse border border-slate-300">
@@ -270,9 +273,92 @@
         </div>
       </div>
 
-      <!-- 報表呈現容器 -->
       <div id="reportContainer" class="bg-white p-6 rounded-xl border border-slate-200 overflow-x-auto print-area min-h-[400px]">
         <div class="text-center text-slate-400 py-10">請點擊上方按鈕產生報表</div>
+      </div>
+    </div>
+
+    <!-- 頁籤四：基本資料管理 (Excel 上傳匯入) -->
+    <div id="studentTab" class="tab-content hidden space-y-6">
+      <div class="bg-white p-6 rounded-xl border border-slate-200 space-y-6">
+        <div class="flex flex-wrap items-center justify-between gap-4 border-b pb-4">
+          <div>
+            <h2 class="text-lg font-bold text-teal-800 flex items-center gap-2">
+              <i data-lucide="file-spreadsheet" class="w-5 h-5"></i> 匯入學生基本資料名冊
+            </h2>
+            <p class="text-xs text-slate-500 mt-1">支援 .xlsx, .xls, .csv 格式。匯入後將覆寫雲端試算表「基本資料」工作表中的學生清單。</p>
+          </div>
+          <button onclick="downloadStudentTemplate()" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-lg border border-slate-300 flex items-center gap-1.5">
+            <i data-lucide="download" class="w-4 h-4 text-teal-600"></i> 下載標準 Excel 範本
+          </button>
+        </div>
+
+        <!-- 檔案拖曳/上傳區塊 -->
+        <div class="border-2 border-dashed border-slate-300 rounded-xl p-8 text-center bg-slate-50 hover:bg-slate-100/80 transition-colors">
+          <input type="file" id="excelFileInput" accept=".xlsx, .xls, .csv" class="hidden" onchange="handleFileSelect(event)">
+          <div class="flex flex-col items-center justify-center space-y-3 cursor-pointer" onclick="document.getElementById('excelFileInput').click()">
+            <i data-lucide="upload-cloud" class="w-12 h-12 text-teal-600 animate-bounce"></i>
+            <p class="text-sm font-semibold text-slate-700">點擊此處選擇 Excel 檔案 或 拖曳檔案至此</p>
+            <p class="text-xs text-slate-400">欄位需包含：學號、年級、班級、座號、姓名、性別</p>
+          </div>
+        </div>
+
+        <!-- 預覽與送出 -->
+        <div id="previewArea" class="hidden space-y-4">
+          <div class="flex items-center justify-between bg-teal-50 border border-teal-200 p-3 rounded-lg">
+            <div class="flex items-center gap-2">
+              <i data-lucide="check-circle" class="w-5 h-5 text-teal-600"></i>
+              <span id="previewCount" class="text-sm font-bold text-teal-900"></span>
+            </div>
+            <button id="btnUploadStudents" onclick="uploadStudentsToSheets()" class="bg-teal-600 hover:bg-teal-700 text-white text-xs px-4 py-2 rounded-lg font-medium flex items-center gap-2">
+              <i data-lucide="cloud-upload" class="w-4 h-4"></i> 確認匯入至雲端試算表
+            </button>
+          </div>
+
+          <div class="max-h-60 overflow-y-auto border border-slate-200 rounded-lg">
+            <table class="w-full text-xs text-center border-collapse">
+              <thead class="bg-slate-100 sticky top-0">
+                <tr>
+                  <th class="border p-2">學號</th>
+                  <th class="border p-2">年級</th>
+                  <th class="border p-2">班級</th>
+                  <th class="border p-2">座號</th>
+                  <th class="border p-2">姓名</th>
+                  <th class="border p-2">性別</th>
+                </tr>
+              </thead>
+              <tbody id="previewTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 目前已載入學生清單 -->
+        <div class="border-t pt-4">
+          <div class="flex justify-between items-center mb-3">
+            <h3 class="text-sm font-bold text-slate-700 flex items-center gap-1.5">
+              <i data-lucide="users" class="w-4 h-4 text-slate-500"></i> 目前系統內學生名單 (<span id="currentStudentCount">0</span> 人)
+            </h3>
+            <input type="text" id="searchStudentInput" oninput="filterCurrentStudents()" placeholder="搜尋姓名/學號/班級..." class="border rounded px-2.5 py-1 text-xs w-48">
+          </div>
+          <div class="max-h-60 overflow-y-auto border border-slate-200 rounded-lg">
+            <table class="w-full text-xs text-center border-collapse">
+              <thead class="bg-slate-50 sticky top-0">
+                <tr>
+                  <th class="border p-1.5">學號</th>
+                  <th class="border p-1.5">年級</th>
+                  <th class="border p-1.5">班級</th>
+                  <th class="border p-1.5">座號</th>
+                  <th class="border p-1.5">姓名</th>
+                  <th class="border p-1.5">性別</th>
+                </tr>
+              </thead>
+              <tbody id="currentStudentsTableBody">
+                <tr><td colspan="6" class="p-3 text-slate-400">目前無學生資料</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
       </div>
     </div>
 
@@ -285,9 +371,7 @@
         <h3 id="modalTitle" class="font-bold text-slate-800">選擇項目</h3>
         <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button>
       </div>
-      <div id="modalOptions" class="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-60 overflow-y-auto p-1">
-        <!-- JS 動態生成選項 Checkbox -->
-      </div>
+      <div id="modalOptions" class="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-60 overflow-y-auto p-1"></div>
       <div class="flex justify-end gap-2 border-t pt-3">
         <button onclick="closeModal()" class="px-4 py-1.5 text-xs text-slate-600 border rounded hover:bg-slate-50">取消</button>
         <button onclick="confirmModalSelection()" class="px-4 py-1.5 text-xs bg-teal-600 text-white rounded hover:bg-teal-700">確認帶入</button>
@@ -297,9 +381,8 @@
 
   <script>
     // 💡 請在此處填入您的 Google Apps Script 網頁應用程式網址
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzrj3zebgP_k8y591eiSQRNyHcdqkZ5s-GTSN2bOMaX8AZr3GDV6HmCwx6OmO6e1wTJ/exec";
+    const SCRIPT_URL = "YOUR_GAS_WEB_APP_URL_HERE";
 
-    // 預設選項資料庫
     const PRESETS = {
       bodyPart: ["頭", "頸", "肩", "胸", "腹", "背", "眼", "顏面", "口腔", "耳鼻喉", "上肢", "腰", "下肢", "臀部", "會陰部"],
       trauma: ["擦傷", "裂割刺傷", "夾壓傷", "跌挫傷", "扭傷", "灼燙傷", "叮咬傷", "骨折", "舊傷", "外科其他"],
@@ -309,10 +392,10 @@
 
     let currentModalType = "";
     let appData = { students: [], locations: [], records: [] };
+    let parsedStudentsForUpload = [];
     let logSubTab = "class";
     let reportType = "monthCount";
 
-    // 初始化頁面
     window.onload = function() {
       lucide.createIcons();
       initDateDefaults();
@@ -346,7 +429,6 @@
       document.getElementById('dispDay').value = parseInt(parts[2], 10);
     }
 
-    // 從 GAS 獲取資料
     async function fetchInitialData() {
       const badge = document.getElementById('statusBadge');
       if (SCRIPT_URL === "YOUR_GAS_WEB_APP_URL_HERE") {
@@ -360,7 +442,8 @@
         if (data.status === "success") {
           appData = data;
           populateLocations(data.locations);
-          badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-green-400"></span> 連線正常 (${data.records.length} 筆記錄)`;
+          renderCurrentStudentsTable(data.students);
+          badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-green-400"></span> 連線正常 (學生: ${data.students.length} 人)`;
         }
       } catch (err) {
         badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-red-400"></span> 連線失敗`;
@@ -389,6 +472,154 @@
           document.getElementById('inputId').value = found.id || "";
         }
       }
+    }
+
+    // 處理 Excel 檔案解析
+    function handleFileSelect(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        const data = new Uint8Array(evt.target.result);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+        const json = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+
+        if (json.length === 0) {
+          alert("Excel 檔案內無資料！");
+          return;
+        }
+
+        // 智慧欄位對應
+        parsedStudentsForUpload = json.map(row => {
+          const findVal = (keys) => {
+            for (let k of keys) {
+              const matched = Object.keys(row).find(field => field.trim() === k);
+              if (matched !== undefined) return row[matched];
+            }
+            return "";
+          };
+
+          return {
+            id: String(findVal(["學號", "id", "StudentID", "序號"])).trim(),
+            grade: String(findVal(["年級", "grade", "年"])).trim(),
+            class: String(findVal(["班級", "class", "班"])).trim(),
+            seat: String(findVal(["座號", "seat", "號"])).trim(),
+            name: String(findVal(["姓名", "name", "學生姓名"])).trim(),
+            gender: String(findVal(["性別", "gender"])).trim()
+          };
+        }).filter(s => s.name || s.id);
+
+        if (parsedStudentsForUpload.length === 0) {
+          alert("無法辨識學生資料，請確認 Excel 標題欄位包含：學號、年級、班級、座號、姓名、性別");
+          return;
+        }
+
+        // 顯示預覽
+        document.getElementById('previewArea').classList.remove('hidden');
+        document.getElementById('previewCount').innerText = `解析成功！共讀取到 ${parsedStudentsForUpload.length} 筆學生資料`;
+        
+        const previewTbody = document.getElementById('previewTableBody');
+        previewTbody.innerHTML = parsedStudentsForUpload.slice(0, 10).map(s => `
+          <tr class="hover:bg-slate-50">
+            <td class="border p-1.5">${s.id}</td>
+            <td class="border p-1.5">${s.grade}</td>
+            <td class="border p-1.5">${s.class}</td>
+            <td class="border p-1.5">${s.seat}</td>
+            <td class="border p-1.5 font-medium">${s.name}</td>
+            <td class="border p-1.5">${s.gender}</td>
+          </tr>
+        `).join('') + (parsedStudentsForUpload.length > 10 ? `<tr><td colspan="6" class="p-2 text-slate-400 text-center">... 僅顯示前 10 筆 ...</td></tr>` : '');
+
+        lucide.createIcons();
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    // 上傳學生資料至 Google 試算表
+    async function uploadStudentsToSheets() {
+      if (parsedStudentsForUpload.length === 0) return;
+      const btn = document.getElementById('btnUploadStudents');
+      btn.disabled = true;
+      btn.innerHTML = `<i data-lucide="loader" class="w-4 h-4 animate-spin"></i> 匯入中...`;
+      lucide.createIcons();
+
+      try {
+        const res = await fetch(SCRIPT_URL, {
+          method: "POST",
+          body: JSON.stringify({
+            action: "importStudents",
+            students: parsedStudentsForUpload
+          })
+        });
+        const result = await res.json();
+        if (result.status === "success") {
+          alert(`成功匯入 ${result.count} 筆學生資料至 Google 試算表！`);
+          appData.students = parsedStudentsForUpload;
+          renderCurrentStudentsTable(appData.students);
+          document.getElementById('previewArea').classList.add('hidden');
+          document.getElementById('excelFileInput').value = "";
+        } else {
+          alert("匯入失敗: " + result.message);
+        }
+      } catch (err) {
+        alert("連線發生錯誤，請檢查網路或 API 設定！");
+        console.error(err);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = `<i data-lucide="cloud-upload" class="w-4 h-4"></i> 確認匯入至雲端試算表`;
+        lucide.createIcons();
+      }
+    }
+
+    // 渲染現有學生清單
+    function renderCurrentStudentsTable(students) {
+      document.getElementById('currentStudentCount').innerText = students.length;
+      const tbody = document.getElementById('currentStudentsTableBody');
+      if (!students || students.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" class="p-3 text-slate-400">目前無學生資料</td></tr>`;
+        return;
+      }
+      tbody.innerHTML = students.map(s => `
+        <tr class="hover:bg-slate-50">
+          <td class="border p-1.5">${s.id || ''}</td>
+          <td class="border p-1.5">${s.grade || ''}</td>
+          <td class="border p-1.5">${s.class || ''}</td>
+          <td class="border p-1.5">${s.seat || ''}</td>
+          <td class="border p-1.5 font-medium">${s.name || ''}</td>
+          <td class="border p-1.5">${s.gender || ''}</td>
+        </tr>
+      `).join('');
+    }
+
+    // 搜尋學生
+    function filterCurrentStudents() {
+      const q = document.getElementById('searchStudentInput').value.trim().toLowerCase();
+      if (!q) {
+        renderCurrentStudentsTable(appData.students);
+        return;
+      }
+      const filtered = appData.students.filter(s => 
+        String(s.name).toLowerCase().includes(q) ||
+        String(s.id).toLowerCase().includes(q) ||
+        `${s.grade}年${s.class}班`.includes(q)
+      );
+      renderCurrentStudentsTable(filtered);
+    }
+
+    // 下載標準 Excel 範本
+    function downloadStudentTemplate() {
+      const templateData = [
+        { "學號": "1001", "年級": 1, "班級": 1, "座號": 1, "姓名": "王小明", "性別": "男" },
+        { "學號": "1002", "年級": 1, "班級": 1, "座號": 2, "姓名": "李小華", "性別": "女" },
+        { "學號": "4001", "年級": 4, "班級": 2, "座號": 15, "姓名": "陳大同", "性別": "男" }
+      ];
+      const ws = XLSX.utils.json_to_sheet(templateData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "學生基本資料範本");
+      XLSX.writeFile(wb, "學校保健室_學生基本資料匯入範本.xlsx");
     }
 
     // 彈窗多選功能
@@ -423,7 +654,7 @@
       closeModal();
     }
 
-    // 表單提交
+    // 儲存記錄
     async function submitForm(e) {
       e.preventDefault();
       const btn = document.getElementById('btnSubmit');
@@ -454,7 +685,7 @@
       };
 
       try {
-        if (SCRIPT_URL !== "YOUR_GAS_WEB_APP_URL_HERE") {
+        if (SCRIPT_URL !== "https://script.google.com/macros/s/AKfycbzrj3zebgP_k8y591eiSQRNyHcdqkZ5s-GTSN2bOMaX8AZr3GDV6HmCwx6OmO6e1wTJ/exec") {
           await fetch(SCRIPT_URL, {
             method: "POST",
             body: JSON.stringify({ action: "addRecord", record: record })
@@ -494,18 +725,14 @@
       event.currentTarget.classList.remove('border-transparent', 'text-teal-100');
     }
 
-    // 日誌子頁籤切換
+    // 日誌查詢控制
     function setLogSubTab(sub) {
       logSubTab = sub;
       ['class', 'date_class', 'date_time'].forEach(s => {
         const b = document.getElementById(`subTabBtn_${s}`);
-        if (s === sub) {
-          b.className = "px-3 py-1.5 text-xs font-semibold rounded bg-teal-600 text-white";
-        } else {
-          b.className = "px-3 py-1.5 text-xs font-semibold rounded bg-slate-100 text-slate-700";
-        }
+        if (s === sub) b.className = "px-3 py-1.5 text-xs font-semibold rounded bg-teal-600 text-white";
+        else b.className = "px-3 py-1.5 text-xs font-semibold rounded bg-slate-100 text-slate-700";
       });
-      // 控制欄位顯隱
       document.getElementById('queryMonthBox').style.display = sub === 'class' ? 'none' : 'block';
       document.getElementById('queryDayBox').style.display = sub === 'class' ? 'none' : 'block';
       document.getElementById('queryGradeBox').style.display = sub === 'class' ? 'block' : 'none';
@@ -513,7 +740,6 @@
       renderLogs();
     }
 
-    // 渲染日誌表格
     function renderLogs() {
       const y = document.getElementById('queryYear').value;
       const m = document.getElementById('queryMonth').value;
@@ -566,29 +792,24 @@
       `).join('');
     }
 
-    // 報表子項目切換
+    // 報表呈現
     function setReportType(type) {
       reportType = type;
       ['monthCount', 'monthStats', 'yearStats'].forEach(t => {
         const b = document.getElementById(`repBtn_${t}`);
-        if (t === type) {
-          b.className = "px-3 py-1.5 text-xs font-semibold rounded bg-teal-600 text-white";
-        } else {
-          b.className = "px-3 py-1.5 text-xs font-semibold rounded bg-slate-100 text-slate-700";
-        }
+        if (t === type) b.className = "px-3 py-1.5 text-xs font-semibold rounded bg-teal-600 text-white";
+        else b.className = "px-3 py-1.5 text-xs font-semibold rounded bg-slate-100 text-slate-700";
       });
       document.getElementById('repMonthWrap').style.display = type === 'yearStats' ? 'none' : 'flex';
       renderReport();
     }
 
-    // 渲染統計報表
     function renderReport() {
       const y = document.getElementById('repYear').value;
       const m = document.getElementById('repMonth').value;
       const container = document.getElementById('reportContainer');
 
       if (reportType === 'monthCount') {
-        // 1. 傷病人數(分月)
         let filtered = appData.records.filter(r => String(r.year) === String(y) && String(r.month) === String(m));
         let groups = {};
         filtered.forEach(r => {
@@ -605,79 +826,50 @@
           <p class="text-xs text-center text-slate-500 mb-4">${y} 年 ${m} 月</p>
           <table class="w-full max-w-xl mx-auto text-xs border border-slate-300 text-center">
             <thead class="bg-slate-100">
-              <tr>
-                <th class="border p-2">年級</th>
-                <th class="border p-2">班級</th>
-                <th class="border p-2">男</th>
-                <th class="border p-2">女</th>
-                <th class="border p-2">合計</th>
-              </tr>
+              <tr><th class="border p-2">年級</th><th class="border p-2">班級</th><th class="border p-2">男</th><th class="border p-2">女</th><th class="border p-2">合計</th></tr>
             </thead>
             <tbody>
               ${rows.length === 0 ? '<tr><td colspan="5" class="p-3 text-slate-400">查無資料</td></tr>' : rows.map(r => `
                 <tr class="hover:bg-slate-50">
-                  <td class="border p-2">${r.grade}</td>
-                  <td class="border p-2">${r.class}</td>
-                  <td class="border p-2">${r.male}</td>
-                  <td class="border p-2">${r.female}</td>
-                  <td class="border p-2 font-bold">${r.total}</td>
+                  <td class="border p-2">${r.grade}</td><td class="border p-2">${r.class}</td><td class="border p-2">${r.male}</td><td class="border p-2">${r.female}</td><td class="border p-2 font-bold">${r.total}</td>
                 </tr>
               `).join('')}
             </tbody>
           </table>
         `;
       } else if (reportType === 'monthStats') {
-        // 2. 傷病統計報表(分月)
         let filtered = appData.records.filter(r => String(r.year) === String(y) && String(r.month) === String(m));
-        
         function getCount(category, itemName) {
           let male = 0, female = 0;
           filtered.forEach(r => {
-            let val = "";
-            if (category === 'period') val = r.period;
-            if (category === 'location') val = r.location;
-            if (category === 'bodyPart') val = r.bodyPart;
-            if (category === 'trauma') val = r.trauma;
-            if (category === 'internal') val = r.internal;
-
-            if (val && val.includes(itemName)) {
+            let val = (category === 'period' ? r.period : category === 'location' ? r.location : category === 'bodyPart' ? r.bodyPart : category === 'trauma' ? r.trauma : r.internal) || "";
+            if (val.includes(itemName)) {
               if (r.gender === '男') male++;
               else if (r.gender === '女') female++;
             }
           });
           return { male, female, total: male + female };
         }
-
-        const buildRows = (catName, items, catKey) => {
-          return items.map((item, idx) => {
-            const res = getCount(catKey, item);
-            return `
-              <tr class="hover:bg-slate-50 text-center">
-                ${idx === 0 ? `<td rowspan="${items.length}" class="border p-2 font-bold bg-slate-50 text-slate-700">${catName}</td>` : ''}
-                <td class="border p-2 text-left">${item}</td>
-                <td class="border p-2">${res.male}</td>
-                <td class="border p-2">${res.female}</td>
-                <td class="border p-2 font-bold">${res.total}</td>
-              </tr>
-            `;
-          }).join('');
-        };
+        const buildRows = (catName, items, catKey) => items.map((item, idx) => {
+          const res = getCount(catKey, item);
+          return `
+            <tr class="hover:bg-slate-50 text-center">
+              ${idx === 0 ? `<td rowspan="${items.length}" class="border p-2 font-bold bg-slate-50 text-slate-700">${catName}</td>` : ''}
+              <td class="border p-2 text-left">${item}</td><td class="border p-2">${res.male}</td><td class="border p-2">${res.female}</td><td class="border p-2 font-bold">${res.total}</td>
+            </tr>
+          `;
+        }).join('');
 
         container.innerHTML = `
           <h3 class="text-base font-bold text-center mb-1">傷病統計報表(分月)</h3>
           <p class="text-xs text-center text-slate-500 mb-4">${y} 年 ${m} 月</p>
           <table class="w-full max-w-2xl mx-auto text-xs border border-slate-300">
             <thead class="bg-slate-100 text-center">
-              <tr>
-                <th colspan="2" class="border p-2">項目 / 性別</th>
-                <th class="border p-2 w-20">男</th>
-                <th class="border p-2 w-20">女</th>
-                <th class="border p-2 w-20">合計</th>
-              </tr>
+              <tr><th colspan="2" class="border p-2">項目 / 性別</th><th class="border p-2 w-20">男</th><th class="border p-2 w-20">女</th><th class="border p-2 w-20">合計</th></tr>
             </thead>
             <tbody>
               ${buildRows('時段', ['上午', '中午', '下午'], 'period')}
-              ${buildRows('受傷地點', appData.locations.length ? appData.locations : PRESETS.bodyPart, 'location')}
+              ${buildRows('受傷地點', appData.locations, 'location')}
               ${buildRows('受傷部位', PRESETS.bodyPart, 'bodyPart')}
               ${buildRows('外科傷病', PRESETS.trauma, 'trauma')}
               ${buildRows('內科傷病', PRESETS.internal, 'internal')}
@@ -685,25 +877,14 @@
           </table>
         `;
       } else if (reportType === 'yearStats') {
-        // 3. 全學年統計報表
         const months = [8, 9, 10, 11, 12, 1, 2, 3, 4, 5, 6, 7];
         let filtered = appData.records.filter(r => String(r.year) === String(y));
-
         container.innerHTML = `
           <h3 class="text-base font-bold text-center mb-1">學年度傷病統計報表總表</h3>
           <p class="text-xs text-center text-slate-500 mb-4">${y} 年度</p>
           <table class="w-full text-[11px] border border-slate-300 text-center">
             <thead class="bg-slate-100">
-              <tr>
-                <th class="border p-1">學期</th>
-                <th class="border p-1">月份</th>
-                <th class="border p-1">合計</th>
-                <th class="border p-1">男</th>
-                <th class="border p-1">女</th>
-                <th class="border p-1">上午</th>
-                <th class="border p-1">中午</th>
-                <th class="border p-1">下午</th>
-              </tr>
+              <tr><th class="border p-1">學期</th><th class="border p-1">月份</th><th class="border p-1">合計</th><th class="border p-1">男</th><th class="border p-1">女</th><th class="border p-1">上午</th><th class="border p-1">中午</th><th class="border p-1">下午</th></tr>
             </thead>
             <tbody>
               ${months.map((mon, idx) => {
@@ -714,17 +895,10 @@
                 const m2 = list.filter(r => r.period === '中午').length;
                 const m3 = list.filter(r => r.period === '下午').length;
                 const sem = idx < 6 ? '上學期' : '下學期';
-
                 return `
                   <tr>
                     ${(idx === 0 || idx === 6) ? `<td rowspan="6" class="border p-1 font-bold bg-slate-50">${sem}</td>` : ''}
-                    <td class="border p-1">${mon} 月</td>
-                    <td class="border p-1 font-bold">${list.length}</td>
-                    <td class="border p-1">${male}</td>
-                    <td class="border p-1">${female}</td>
-                    <td class="border p-1">${m1}</td>
-                    <td class="border p-1">${m2}</td>
-                    <td class="border p-1">${m3}</td>
+                    <td class="border p-1">${mon} 月</td><td class="border p-1 font-bold">${list.length}</td><td class="border p-1">${male}</td><td class="border p-1">${female}</td><td class="border p-1">${m1}</td><td class="border p-1">${m2}</td><td class="border p-1">${m3}</td>
                   </tr>
                 `;
               }).join('')}
