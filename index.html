@@ -27,7 +27,7 @@
         <h1 class="text-xl font-bold tracking-wider">學校健康中心傷病記錄管理系統</h1>
       </div>
       <div id="statusBadge" class="text-xs bg-teal-800 px-3 py-1 rounded-full flex items-center gap-2">
-        <span class="w-2 h-2 rounded-full bg-yellow-400 animate-pulse"></span> 資料同步中...
+        <span class="w-2 h-2 rounded-full bg-green-400"></span> 準備就緒
       </div>
     </div>
     <div class="max-w-7xl mx-auto px-4 flex space-x-1 border-t border-teal-600/50">
@@ -58,15 +58,15 @@
           <div class="grid grid-cols-3 gap-1">
             <div>
               <label class="block text-xs text-slate-500 mb-1">年</label>
-              <input type="text" id="dispYear" readonly class="w-full bg-slate-200 border rounded px-1.5 py-1.5 text-sm text-center">
+              <input type="text" id="dispYear" readonly class="w-full bg-slate-200 border rounded px-1.5 py-1.5 text-sm text-center font-medium">
             </div>
             <div>
               <label class="block text-xs text-slate-500 mb-1">月</label>
-              <input type="text" id="dispMonth" readonly class="w-full bg-slate-200 border rounded px-1.5 py-1.5 text-sm text-center">
+              <input type="text" id="dispMonth" readonly class="w-full bg-slate-200 border rounded px-1.5 py-1.5 text-sm text-center font-medium">
             </div>
             <div>
               <label class="block text-xs text-slate-500 mb-1">日</label>
-              <input type="text" id="dispDay" readonly class="w-full bg-slate-200 border rounded px-1.5 py-1.5 text-sm text-center">
+              <input type="text" id="dispDay" readonly class="w-full bg-slate-200 border rounded px-1.5 py-1.5 text-sm text-center font-medium">
             </div>
           </div>
           <div>
@@ -87,7 +87,7 @@
           </div>
         </div>
 
-        <!-- 學生基本資料 (輸入年級/班級/座號自動比對) -->
+        <!-- 學生基本資料 (自動帶出) -->
         <div class="grid grid-cols-2 md:grid-cols-6 gap-4 bg-teal-50/50 p-4 rounded-lg border border-teal-100">
           <div>
             <label class="block text-xs font-semibold text-teal-900 mb-1">年級 *</label>
@@ -278,8 +278,22 @@
       </div>
     </div>
 
-    <!-- 頁籤四：基本資料管理 (Excel 上傳匯入) -->
+    <!-- 頁籤四：基本資料管理 (Excel 上傳匯入 & 系統初始化) -->
     <div id="studentTab" class="tab-content hidden space-y-6">
+      
+      <!-- 系統初始化功能卡片 -->
+      <div class="bg-gradient-to-r from-teal-50 to-emerald-50 p-5 rounded-xl border border-teal-200 flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h3 class="text-sm font-bold text-teal-900 flex items-center gap-2">
+            <i data-lucide="wrench" class="w-4 h-4 text-teal-700"></i> Google 試算表結構初始化
+          </h3>
+          <p class="text-xs text-teal-700 mt-1">若您的 Google 試算表尚未建立「基本資料」與「傷病記錄表」，可點此一鍵自動建立。</p>
+        </div>
+        <button id="btnInitSheet" onclick="triggerInitSheet()" class="bg-teal-700 hover:bg-teal-800 text-white text-xs px-4 py-2 rounded-lg font-medium shadow-sm flex items-center gap-1.5">
+          <i data-lucide="database" class="w-4 h-4"></i> 一鍵初始化試算表
+        </button>
+      </div>
+
       <div class="bg-white p-6 rounded-xl border border-slate-200 space-y-6">
         <div class="flex flex-wrap items-center justify-between gap-4 border-b pb-4">
           <div>
@@ -380,8 +394,8 @@
   </div>
 
   <script>
-    // 💡 請在此處填入您的 Google Apps Script 網頁應用程式網址
-    const SCRIPT_URL = "YOUR_GAS_WEB_APP_URL_HERE";
+    // 💡 您的 Google Apps Script 網頁應用程式網址
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzrj3zebgP_k8y591eiSQRNyHcdqkZ5s-GTSN2bOMaX8AZr3GDV6HmCwx6OmO6e1wTJ/exec";
 
     const PRESETS = {
       bodyPart: ["頭", "頸", "肩", "胸", "腹", "背", "眼", "顏面", "口腔", "耳鼻喉", "上肢", "腰", "下肢", "臀部", "會陰部"],
@@ -399,8 +413,24 @@
     window.onload = function() {
       lucide.createIcons();
       initDateDefaults();
+      // 先從本機快取秒開資料
+      loadLocalCache();
+      // 背景極速同步
       fetchInitialData();
     };
+
+    function loadLocalCache() {
+      try {
+        const cached = localStorage.getItem("HEALTH_APP_CACHE");
+        if (cached) {
+          appData = JSON.parse(cached);
+          populateLocations(appData.locations || []);
+          renderCurrentStudentsTable(appData.students || []);
+        } else {
+          populateLocations(["運動場", "遊戲器材", "普通教室", "專科教室", "走廊", "樓梯", "地下室", "體育館活動中心", "廁所", "校外", "其他"]);
+        }
+      } catch(e) {}
+    }
 
     function initDateDefaults() {
       const now = new Date();
@@ -431,38 +461,65 @@
 
     async function fetchInitialData() {
       const badge = document.getElementById('statusBadge');
-      if (SCRIPT_URL === "YOUR_GAS_WEB_APP_URL_HERE") {
-        badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-red-400"></span> 請設定 API 網址`;
-        populateLocations(["運動場", "遊戲器材", "普通教室", "專科教室", "走廊", "樓梯", "地下室", "體育館活動中心", "廁所", "校外", "其他"]);
-        return;
-      }
+      badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-yellow-400 animate-pulse"></span> 背景同步中...`;
+
       try {
         const res = await fetch(`${SCRIPT_URL}?action=getInitialData`);
         const data = await res.json();
         if (data.status === "success") {
           appData = data;
+          localStorage.setItem("HEALTH_APP_CACHE", JSON.stringify(data));
           populateLocations(data.locations);
           renderCurrentStudentsTable(data.students);
           badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-green-400"></span> 連線正常 (學生: ${data.students.length} 人)`;
         }
       } catch (err) {
-        badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-red-400"></span> 連線失敗`;
+        badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-slate-400"></span> 離線/快取模式`;
         console.error(err);
+      }
+    }
+
+    // 網頁上一鍵初始化試算表
+    async function triggerInitSheet() {
+      const btn = document.getElementById('btnInitSheet');
+      btn.disabled = true;
+      btn.innerHTML = `<i data-lucide="loader" class="w-4 h-4 animate-spin"></i> 初始化中...`;
+      lucide.createIcons();
+
+      try {
+        const res = await fetch(SCRIPT_URL, {
+          method: "POST",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify({ action: "initSheet" })
+        });
+        const result = await res.json();
+        if (result.status === "success") {
+          alert("🎉 試算表結構初始化成功！「基本資料」與「傷病記錄表」已就緒。");
+          fetchInitialData();
+        } else {
+          alert("❌ 初始化失敗: " + (result.message || "未知原因"));
+        }
+      } catch (err) {
+        alert("連線錯誤: " + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = `<i data-lucide="database" class="w-4 h-4"></i> 一鍵初始化試算表`;
+        lucide.createIcons();
       }
     }
 
     function populateLocations(locations) {
       const select = document.getElementById('inputLocation');
+      if (!locations || locations.length === 0) return;
       select.innerHTML = locations.map(loc => `<option value="${loc}">${loc}</option>`).join('');
     }
 
-    // 自動比對學生
     function matchStudent() {
       const g = document.getElementById('inputGrade').value.trim();
       const c = document.getElementById('inputClass').value.trim();
       const s = document.getElementById('inputSeat').value.trim();
 
-      if (g && c && s && appData.students.length > 0) {
+      if (g && c && s && appData.students && appData.students.length > 0) {
         const found = appData.students.find(stu => 
           String(stu.grade) === g && String(stu.class) === c && String(stu.seat) === s
         );
@@ -474,7 +531,6 @@
       }
     }
 
-    // 處理 Excel 檔案解析
     function handleFileSelect(e) {
       const file = e.target.files[0];
       if (!file) return;
@@ -492,7 +548,6 @@
           return;
         }
 
-        // 智慧欄位對應
         parsedStudentsForUpload = json.map(row => {
           const findVal = (keys) => {
             for (let k of keys) {
@@ -513,11 +568,10 @@
         }).filter(s => s.name || s.id);
 
         if (parsedStudentsForUpload.length === 0) {
-          alert("無法辨識學生資料，請確認 Excel 標題欄位包含：學號、年級、班級、座號、姓名、性別");
+          alert("無法辨識學生資料，請確認 Excel 標題包含：學號、年級、班級、座號、姓名、性別");
           return;
         }
 
-        // 顯示預覽
         document.getElementById('previewArea').classList.remove('hidden');
         document.getElementById('previewCount').innerText = `解析成功！共讀取到 ${parsedStudentsForUpload.length} 筆學生資料`;
         
@@ -538,54 +592,47 @@
       reader.readAsArrayBuffer(file);
     }
 
-    // 上傳學生資料至 Google 試算表
-async function uploadStudentsToSheets() {
-  if (parsedStudentsForUpload.length === 0) return;
-  
-  if (SCRIPT_URL === "https://script.google.com/macros/s/AKfycbzrj3zebgP_k8y591eiSQRNyHcdqkZ5s-GTSN2bOMaX8AZr3GDV6HmCwx6OmO6e1wTJ/exec")) {
-    alert("請先在 index.html 中設定正確的 SCRIPT_URL！");
-    return;
-  }
+    async function uploadStudentsToSheets() {
+      if (parsedStudentsForUpload.length === 0) return;
 
-  const btn = document.getElementById('btnUploadStudents');
-  btn.disabled = true;
-  btn.innerHTML = `<i data-lucide="loader" class="w-4 h-4 animate-spin"></i> 匯入中...`;
-  lucide.createIcons();
+      const btn = document.getElementById('btnUploadStudents');
+      btn.disabled = true;
+      btn.innerHTML = `<i data-lucide="loader" class="w-4 h-4 animate-spin"></i> 匯入中...`;
+      lucide.createIcons();
 
-  try {
-    // 使用 text/plain 傳送，避免瀏覽器觸發 CORS OPTIONS 預檢被 Google 阻擋
-    const res = await fetch(SCRIPT_URL, {
-      method: "POST",
-      headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify({
-        action: "importStudents",
-        students: parsedStudentsForUpload
-      })
-    });
-    
-    const result = await res.json();
-    if (result.status === "success") {
-      alert(`🎉 成功匯入 ${result.count} 筆學生資料至 Google 試算表！`);
-      appData.students = parsedStudentsForUpload;
-      renderCurrentStudentsTable(appData.students);
-      document.getElementById('previewArea').classList.add('hidden');
-      document.getElementById('excelFileInput').value = "";
-    } else {
-      alert("❌ 匯入失敗: " + (result.message || "未知錯誤"));
+      try {
+        const res = await fetch(SCRIPT_URL, {
+          method: "POST",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify({
+            action: "importStudents",
+            students: parsedStudentsForUpload
+          })
+        });
+        
+        const result = await res.json();
+        if (result.status === "success") {
+          alert(`🎉 成功匯入 ${result.count} 筆學生資料至 Google 試算表！`);
+          appData.students = parsedStudentsForUpload;
+          localStorage.setItem("HEALTH_APP_CACHE", JSON.stringify(appData));
+          renderCurrentStudentsTable(appData.students);
+          document.getElementById('previewArea').classList.add('hidden');
+          document.getElementById('excelFileInput').value = "";
+        } else {
+          alert("❌ 匯入失敗: " + (result.message || "未知錯誤"));
+        }
+      } catch (err) {
+        alert("連線發生錯誤！\n詳細錯誤：" + err.message);
+        console.error(err);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = `<i data-lucide="cloud-upload" class="w-4 h-4"></i> 確認匯入至雲端試算表`;
+        lucide.createIcons();
+      }
     }
-  } catch (err) {
-    alert("連線發生錯誤！請確認：\n1. Apps Script 已執行過「initSheet」完成授權\n2. 部署權限設定為「所有人 (Anyone)」\n詳細錯誤：" + err.message);
-    console.error(err);
-  } finally {
-    btn.disabled = false;
-    btn.innerHTML = `<i data-lucide="cloud-upload" class="w-4 h-4"></i> 確認匯入至雲端試算表`;
-    lucide.createIcons();
-  }
-}
 
-    // 渲染現有學生清單
     function renderCurrentStudentsTable(students) {
-      document.getElementById('currentStudentCount').innerText = students.length;
+      document.getElementById('currentStudentCount').innerText = students ? students.length : 0;
       const tbody = document.getElementById('currentStudentsTableBody');
       if (!students || students.length === 0) {
         tbody.innerHTML = `<tr><td colspan="6" class="p-3 text-slate-400">目前無學生資料</td></tr>`;
@@ -603,7 +650,6 @@ async function uploadStudentsToSheets() {
       `).join('');
     }
 
-    // 搜尋學生
     function filterCurrentStudents() {
       const q = document.getElementById('searchStudentInput').value.trim().toLowerCase();
       if (!q) {
@@ -618,7 +664,6 @@ async function uploadStudentsToSheets() {
       renderCurrentStudentsTable(filtered);
     }
 
-    // 下載標準 Excel 範本
     function downloadStudentTemplate() {
       const templateData = [
         { "學號": "1001", "年級": 1, "班級": 1, "座號": 1, "姓名": "王小明", "性別": "男" },
@@ -631,7 +676,6 @@ async function uploadStudentsToSheets() {
       XLSX.writeFile(wb, "學校保健室_學生基本資料匯入範本.xlsx");
     }
 
-    // 彈窗多選功能
     function openModal(type) {
       currentModalType = type;
       const titleMap = { bodyPart: "選擇受傷部位", trauma: "選擇外科傷病", internal: "選擇內科傷病", treatment: "選擇傷病處理" };
@@ -663,7 +707,6 @@ async function uploadStudentsToSheets() {
       closeModal();
     }
 
-    // 儲存記錄
     async function submitForm(e) {
       e.preventDefault();
       const btn = document.getElementById('btnSubmit');
@@ -694,17 +737,23 @@ async function uploadStudentsToSheets() {
       };
 
       try {
-        if (SCRIPT_URL !== "https://script.google.com/macros/s/AKfycbzrj3zebgP_k8y591eiSQRNyHcdqkZ5s-GTSN2bOMaX8AZr3GDV6HmCwx6OmO6e1wTJ/exec") {
-          await fetch(SCRIPT_URL, {
-            method: "POST",
-            body: JSON.stringify({ action: "addRecord", record: record })
-          });
+        const res = await fetch(SCRIPT_URL, {
+          method: "POST",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify({ action: "addRecord", record: record })
+        });
+        const result = await res.json();
+        if (result.status === "success") {
+          if (!appData.records) appData.records = [];
+          appData.records.push(record);
+          localStorage.setItem("HEALTH_APP_CACHE", JSON.stringify(appData));
+          alert("🎉 傷病記錄已成功儲存至 Google 試算表！");
+          resetForm();
+        } else {
+          alert("❌ 儲存失敗: " + result.message);
         }
-        appData.records.push(record);
-        alert("傷病記錄已成功儲存！");
-        resetForm();
       } catch (err) {
-        alert("儲存失敗，請檢查網路或 API 設定！");
+        alert("儲存失敗，請檢查網路！\n錯誤: " + err.message);
         console.error(err);
       } finally {
         btn.disabled = false;
@@ -722,7 +771,6 @@ async function uploadStudentsToSheets() {
       initDateDefaults();
     }
 
-    // 頁籤切換
     function switchTab(tabId) {
       document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
       document.getElementById(tabId).classList.remove('hidden');
@@ -734,7 +782,6 @@ async function uploadStudentsToSheets() {
       event.currentTarget.classList.remove('border-transparent', 'text-teal-100');
     }
 
-    // 日誌查詢控制
     function setLogSubTab(sub) {
       logSubTab = sub;
       ['class', 'date_class', 'date_time'].forEach(s => {
@@ -756,7 +803,7 @@ async function uploadStudentsToSheets() {
       const g = document.getElementById('queryGrade').value;
       const c = document.getElementById('queryClass').value;
 
-      let filtered = appData.records.filter(r => String(r.year) === String(y));
+      let filtered = (appData.records || []).filter(r => String(r.year) === String(y));
 
       if (logSubTab === 'class') {
         document.getElementById('logTableTitle').innerText = `${y} 年 ${g || '-'} 年 ${c || '-'} 班 傷病日誌`;
@@ -801,7 +848,6 @@ async function uploadStudentsToSheets() {
       `).join('');
     }
 
-    // 報表呈現
     function setReportType(type) {
       reportType = type;
       ['monthCount', 'monthStats', 'yearStats'].forEach(t => {
@@ -819,7 +865,7 @@ async function uploadStudentsToSheets() {
       const container = document.getElementById('reportContainer');
 
       if (reportType === 'monthCount') {
-        let filtered = appData.records.filter(r => String(r.year) === String(y) && String(r.month) === String(m));
+        let filtered = (appData.records || []).filter(r => String(r.year) === String(y) && String(r.month) === String(m));
         let groups = {};
         filtered.forEach(r => {
           const key = `${r.grade || '未填'}年${r.class || '未填'}班`;
@@ -847,7 +893,7 @@ async function uploadStudentsToSheets() {
           </table>
         `;
       } else if (reportType === 'monthStats') {
-        let filtered = appData.records.filter(r => String(r.year) === String(y) && String(r.month) === String(m));
+        let filtered = (appData.records || []).filter(r => String(r.year) === String(y) && String(r.month) === String(m));
         function getCount(category, itemName) {
           let male = 0, female = 0;
           filtered.forEach(r => {
@@ -878,7 +924,7 @@ async function uploadStudentsToSheets() {
             </thead>
             <tbody>
               ${buildRows('時段', ['上午', '中午', '下午'], 'period')}
-              ${buildRows('受傷地點', appData.locations, 'location')}
+              ${buildRows('受傷地點', appData.locations || [], 'location')}
               ${buildRows('受傷部位', PRESETS.bodyPart, 'bodyPart')}
               ${buildRows('外科傷病', PRESETS.trauma, 'trauma')}
               ${buildRows('內科傷病', PRESETS.internal, 'internal')}
@@ -887,7 +933,7 @@ async function uploadStudentsToSheets() {
         `;
       } else if (reportType === 'yearStats') {
         const months = [8, 9, 10, 11, 12, 1, 2, 3, 4, 5, 6, 7];
-        let filtered = appData.records.filter(r => String(r.year) === String(y));
+        let filtered = (appData.records || []).filter(r => String(r.year) === String(y));
         container.innerHTML = `
           <h3 class="text-base font-bold text-center mb-1">學年度傷病統計報表總表</h3>
           <p class="text-xs text-center text-slate-500 mb-4">${y} 年度</p>
