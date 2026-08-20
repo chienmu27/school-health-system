@@ -86,10 +86,10 @@
           </div>
           <div>
             <label class="block text-xs font-semibold text-slate-600 mb-1">時間 *</label>
-            <input type="time" id="inputTime" required class="w-full border rounded px-2.5 py-1.5 text-sm bg-white">
+            <input type="time" id="inputTime" required onchange="autoSetPeriod()" oninput="autoSetPeriod()" class="w-full border rounded px-2.5 py-1.5 text-sm bg-white">
           </div>
           <div>
-            <label class="block text-xs font-semibold text-slate-600 mb-1">時段 *</label>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">時段 * (自動判定)</label>
             <select id="inputPeriod" required class="w-full border rounded px-2.5 py-1.5 text-sm bg-white">
               <option value="上午">上午</option>
               <option value="中午">中午</option>
@@ -506,7 +506,7 @@
       if (match && match[1]) {
         return match[1];
       }
-      return input; // 若直接輸入純 ID
+      return input;
     }
 
     function openConfigModal() {
@@ -566,7 +566,9 @@
       document.getElementById('queryDay').value = now.getDate();
       document.getElementById('repYear').value = yyyy;
       document.getElementById('repMonth').value = now.getMonth() + 1;
+      
       syncDateFields();
+      autoSetPeriod(); // 自動依當下時間設置時段
     }
 
     function syncDateFields() {
@@ -576,6 +578,32 @@
       document.getElementById('dispYear').value = parts[0];
       document.getElementById('dispMonth').value = parseInt(parts[1], 10);
       document.getElementById('dispDay').value = parseInt(parts[2], 10);
+    }
+
+    // 💡 依據時間自動判斷並設定時段 (上午 / 中午 / 下午)
+    function autoSetPeriod() {
+      const timeVal = document.getElementById('inputTime').value;
+      if (!timeVal) return;
+
+      const [hStr, mStr] = timeVal.split(':');
+      const hr = parseInt(hStr, 10);
+      const min = parseInt(mStr, 10);
+      const totalMinutes = hr * 60 + min;
+
+      const periodSelect = document.getElementById('inputPeriod');
+
+      // 1. 上午：07:00 ~ 12:00 (<= 720 分鐘)
+      if (totalMinutes <= 12 * 60) {
+        periodSelect.value = "上午";
+      }
+      // 2. 中午：12:01 ~ 13:30 (721 ~ 810 分鐘)
+      else if (totalMinutes <= 13 * 60 + 30) {
+        periodSelect.value = "中午";
+      }
+      // 3. 下午：13:31 ~ 18:00 (>= 811 分鐘)
+      else {
+        periodSelect.value = "下午";
+      }
     }
 
     function setQuickRest(hr, min) {
