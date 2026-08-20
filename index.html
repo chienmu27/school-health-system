@@ -539,40 +539,49 @@
     }
 
     // 上傳學生資料至 Google 試算表
-    async function uploadStudentsToSheets() {
-      if (parsedStudentsForUpload.length === 0) return;
-      const btn = document.getElementById('btnUploadStudents');
-      btn.disabled = true;
-      btn.innerHTML = `<i data-lucide="loader" class="w-4 h-4 animate-spin"></i> 匯入中...`;
-      lucide.createIcons();
+async function uploadStudentsToSheets() {
+  if (parsedStudentsForUpload.length === 0) return;
+  
+  if (SCRIPT_URL === "YOUR_GAS_WEB_APP_URL_HERE" || !SCRIPT_URL.startsWith("https://script.google.com")) {
+    alert("請先在 index.html 中設定正確的 SCRIPT_URL！");
+    return;
+  }
 
-      try {
-        const res = await fetch(SCRIPT_URL, {
-          method: "POST",
-          body: JSON.stringify({
-            action: "importStudents",
-            students: parsedStudentsForUpload
-          })
-        });
-        const result = await res.json();
-        if (result.status === "success") {
-          alert(`成功匯入 ${result.count} 筆學生資料至 Google 試算表！`);
-          appData.students = parsedStudentsForUpload;
-          renderCurrentStudentsTable(appData.students);
-          document.getElementById('previewArea').classList.add('hidden');
-          document.getElementById('excelFileInput').value = "";
-        } else {
-          alert("匯入失敗: " + result.message);
-        }
-      } catch (err) {
-        alert("連線發生錯誤，請檢查網路或 API 設定！");
-        console.error(err);
-      } finally {
-        btn.disabled = false;
-        btn.innerHTML = `<i data-lucide="cloud-upload" class="w-4 h-4"></i> 確認匯入至雲端試算表`;
-        lucide.createIcons();
-      }
+  const btn = document.getElementById('btnUploadStudents');
+  btn.disabled = true;
+  btn.innerHTML = `<i data-lucide="loader" class="w-4 h-4 animate-spin"></i> 匯入中...`;
+  lucide.createIcons();
+
+  try {
+    // 使用 text/plain 傳送，避免瀏覽器觸發 CORS OPTIONS 預檢被 Google 阻擋
+    const res = await fetch(SCRIPT_URL, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify({
+        action: "importStudents",
+        students: parsedStudentsForUpload
+      })
+    });
+    
+    const result = await res.json();
+    if (result.status === "success") {
+      alert(`🎉 成功匯入 ${result.count} 筆學生資料至 Google 試算表！`);
+      appData.students = parsedStudentsForUpload;
+      renderCurrentStudentsTable(appData.students);
+      document.getElementById('previewArea').classList.add('hidden');
+      document.getElementById('excelFileInput').value = "";
+    } else {
+      alert("❌ 匯入失敗: " + (result.message || "未知錯誤"));
     }
+  } catch (err) {
+    alert("連線發生錯誤！請確認：\n1. Apps Script 已執行過「initSheet」完成授權\n2. 部署權限設定為「所有人 (Anyone)」\n詳細錯誤：" + err.message);
+    console.error(err);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = `<i data-lucide="cloud-upload" class="w-4 h-4"></i> 確認匯入至雲端試算表`;
+    lucide.createIcons();
+  }
+}
 
     // 渲染現有學生清單
     function renderCurrentStudentsTable(students) {
